@@ -16,7 +16,7 @@ export function RankBadge({ topPercent, city, totalViolations, className }: Rank
     : `top ${topPercent}%`;
   const sub = totalViolations === 0
     ? "clean record. boring."
-    : `of ${city} plates`;
+    : `of ${city} drivers`;
 
   return (
     <div

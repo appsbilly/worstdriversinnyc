@@ -56,7 +56,7 @@ export default async function HomePage() {
         <div className="mb-4 flex items-end justify-between">
           <div>
             <h2 className="font-serif text-3xl font-bold tracking-tight md:text-4xl">
-              worst plates · last 30 days
+              worst drivers · last 30 days
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {range ? <>tickets issued <span className="text-foreground">{range}</span></> : "refreshed daily from nyc open data"}
@@ -80,7 +80,7 @@ export default async function HomePage() {
         />
         <FeatureCard
           title="view full leaderboard"
-          body="top 100 most-ticketed plates in the city, refreshed every 24 hours."
+          body="top 100 worst drivers in the city, refreshed every 24 hours."
           href="/leaderboard/nyc"
         />
         <FeatureCard

@@ -28,7 +28,7 @@ export function Leaderboard({ entries, city, compact = false }: LeaderboardProps
     <div className="rounded-xl border border-border">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="text-xs uppercase tracking-widest text-muted-foreground">
-          top {rows.length} plates · {city}
+          top {rows.length} drivers · {city}
         </span>
         <button
           type="button"

@@ -43,7 +43,7 @@ export async function GET(_req: Request, { params }: Ctx) {
   const subLabel = supported
     ? totalViolations === 0
       ? "boring."
-      : `of ${cityName} plates`
+      : `of ${cityName} drivers`
     : `${cityName} lookups land soon`;
 
   const accent = "#FF6B35";

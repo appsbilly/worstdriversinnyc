@@ -93,7 +93,7 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
         {city.shortName} · leaderboard
       </p>
       <h1 className="mt-2 font-serif text-4xl font-bold tracking-tight md:text-5xl">
-        the worst plates in {city.shortName.toLowerCase()}.
+        the worst drivers in {city.shortName.toLowerCase()}.
       </h1>
       <p className="mt-2 max-w-xl text-muted-foreground">
         ranked by ticket count from nyc's open-data feed over the selected window.
