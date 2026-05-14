@@ -39,10 +39,19 @@ type Bucket = { plate: string; state: string; count: number; fines: number };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Acceptable date range for an NYC ticket: from 2010-01-01 through ~30 days in
+// the future. SODA records occasionally have data-entry typos (e.g. year 2096
+// instead of 2026); clamping ensures those don't blow up the "data window"
+// display or land in the wrong time-window bucket.
+const MIN_TS = Date.parse("2010-01-01T00:00:00Z");
+const MAX_TS = Date.now() + 30 * 24 * 60 * 60 * 1000;
+
 function parseSodaDate(input: string | undefined): number {
   if (!input) return 0;
   const t = Date.parse(input);
-  return Number.isFinite(t) ? t : 0;
+  if (!Number.isFinite(t)) return 0;
+  if (t < MIN_TS || t > MAX_TS) return 0;
+  return t;
 }
 
 function toIsoDay(ms: number): string {
