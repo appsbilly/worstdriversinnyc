@@ -1,45 +1,61 @@
 /**
  * Refresh NYC plate leaderboards + percentile buckets in Upstash Redis.
  *
- * One pass through the SODA dataset, four time-windowed leaderboards
- * (1w / 1m / 1y / all). Runs from GitHub Actions — no Vercel 60s cap.
+ * One pass through the SODA dataset using :id-based keyset pagination
+ * (fast at any depth — doesn't slow down like $offset does). Computes four
+ * time-windowed leaderboards (1w / 1m / 1y / all) and writes them to Redis
+ * along with date-range metadata so the UI can show "data from <date> to <date>".
  *
  * env vars:
  *   UPSTASH_REDIS_REST_URL       (required)
  *   UPSTASH_REDIS_REST_TOKEN     (required)
  *   NYC_OPEN_DATA_APP_TOKEN      (optional but recommended)
- *   ROWS_TARGET                  (optional — default 10,000,000)
+ *   ROWS_TARGET                  (optional — default 80,000,000 ≈ as much as the
+ *                                 dataset has; script stops at end-of-data or kill)
+ *   FLUSH_EVERY_PAGES            (optional — default 100, write to redis every N pages
+ *                                 so progress isn't lost if the runner is killed)
  */
 import { Redis } from "@upstash/redis";
 
 const SODA_BASE = "https://data.cityofnewyork.us/resource/nc67-uf89.json";
 const PAGE_SIZE = 50_000;
-const ROWS_TARGET = Number(process.env.ROWS_TARGET || 10_000_000);
+const ROWS_TARGET = Number(process.env.ROWS_TARGET || 80_000_000);
+const FLUSH_EVERY_PAGES = Number(process.env.FLUSH_EVERY_PAGES || 100);
 const APP_TOKEN = process.env.NYC_OPEN_DATA_APP_TOKEN;
-const PAGE_TIMEOUT_MS = 180_000;
-const MAX_RETRIES = 4;
+const PAGE_TIMEOUT_MS = 120_000;
+const MAX_RETRIES = 5;
 
 type Window = "1w" | "1m" | "1y" | "all";
 const WINDOWS: Window[] = ["1w", "1m", "1y", "all"];
 
-type Row = { plate?: string; state?: string; fine_amount?: string; issue_date?: string };
+type Row = {
+  ":id"?: string;
+  plate?: string;
+  state?: string;
+  fine_amount?: string;
+  issue_date?: string;
+};
 type Bucket = { plate: string; state: string; count: number; fines: number };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function parseSodaDate(input: string | undefined): number {
   if (!input) return 0;
-  // SODA returns either MM/DD/YYYY or full ISO. Date.parse handles both well enough.
   const t = Date.parse(input);
   return Number.isFinite(t) ? t : 0;
 }
 
-async function fetchPage(offset: number): Promise<Row[]> {
+function toIsoDay(ms: number): string {
+  if (!ms) return "";
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+async function fetchPage(cursor: string | null): Promise<Row[]> {
   const url = new URL(SODA_BASE);
-  url.searchParams.set("$select", "plate,state,fine_amount,issue_date");
+  url.searchParams.set("$select", ":id,plate,state,fine_amount,issue_date");
   url.searchParams.set("$limit", String(PAGE_SIZE));
-  url.searchParams.set("$offset", String(offset));
   url.searchParams.set("$order", ":id DESC");
+  if (cursor) url.searchParams.set("$where", `:id < '${cursor}'`);
 
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -56,7 +72,7 @@ async function fetchPage(offset: number): Promise<Row[]> {
       clearTimeout(timer);
       if (res.status === 429 || res.status >= 500) {
         const wait = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
-        console.warn(`  ${res.status} on offset=${offset}, attempt=${attempt + 1}, backing off ${Math.round(wait)}ms`);
+        console.warn(`  ${res.status} on cursor=${cursor ?? "<start>"}, attempt=${attempt + 1}, backing off ${Math.round(wait)}ms`);
         await sleep(wait);
         continue;
       }
@@ -69,7 +85,7 @@ async function fetchPage(offset: number): Promise<Row[]> {
       clearTimeout(timer);
       lastErr = err;
       const wait = 2000 * Math.pow(2, attempt);
-      console.warn(`  fetch failed on offset=${offset}, attempt=${attempt + 1}:`, err instanceof Error ? err.message : err);
+      console.warn(`  fetch failed on cursor=${cursor ?? "<start>"}, attempt=${attempt + 1}:`, err instanceof Error ? err.message : err);
       if (attempt < MAX_RETRIES) await sleep(wait);
     }
   }
@@ -80,6 +96,70 @@ function percentile(sortedAsc: number[], p: number): number {
   if (!sortedAsc.length) return 0;
   const idx = Math.min(sortedAsc.length - 1, Math.floor((p / 100) * sortedAsc.length));
   return sortedAsc[idx]!;
+}
+
+function isJunkPlate(plate: string, state: string): boolean {
+  const p = plate.toUpperCase();
+  if (p === "BLANK" || p === "BLANKPLATE" || p === "NONE" || p === "UNKNOWN" || p === "NOPLATE") return true;
+  if (state === "99" || state === "XX") return true;
+  return false;
+}
+
+interface Meta {
+  window: Window;
+  computedAt: string;
+  oldestIssueDate: string;
+  newestIssueDate: string;
+  rowsScanned: number;
+  uniquePlates: number;
+}
+
+async function writeWindows(
+  redis: Redis,
+  aggs: Record<Window, Map<string, Bucket>>,
+  ranges: Record<Window, { min: number; max: number }>,
+  totalRows: number,
+  ttlSeconds: number,
+) {
+  for (const w of WINDOWS) {
+    const sorted = [...aggs[w].values()].sort((a, b) => b.count - a.count);
+    const leaderboard = sorted.slice(0, 500).map((e, i) => ({
+      rank: i + 1,
+      plate: e.plate,
+      state: e.state,
+      violationCount: e.count,
+      totalFines: Math.round(e.fines * 100) / 100,
+    }));
+    const meta: Meta = {
+      window: w,
+      computedAt: new Date().toISOString(),
+      oldestIssueDate: toIsoDay(ranges[w].min),
+      newestIssueDate: toIsoDay(ranges[w].max),
+      rowsScanned: totalRows,
+      uniquePlates: aggs[w].size,
+    };
+    await redis.set(`leaderboard:nyc:${w}`, leaderboard, { ex: ttlSeconds });
+    await redis.set(`leaderboard:nyc:${w}:meta`, meta, { ex: ttlSeconds });
+  }
+  // legacy key for fallback compatibility
+  const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
+  if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: ttlSeconds });
+
+  // percentile buckets from the broadest (all) window
+  const allCounts = [...aggs.all.values()].map((b) => b.count).sort((a, b) => a - b);
+  const percentiles = {
+    city: "nyc",
+    computedAt: new Date().toISOString(),
+    totalPlatesObserved: allCounts.length,
+    buckets: {
+      p50: Math.max(2, percentile(allCounts, 50)),
+      p75: Math.max(3, percentile(allCounts, 75)),
+      p90: Math.max(5, percentile(allCounts, 90)),
+      p95: Math.max(10, percentile(allCounts, 95)),
+      p99: Math.max(25, percentile(allCounts, 99)),
+    },
+  };
+  await redis.set("percentiles:nyc", percentiles, { ex: ttlSeconds });
 }
 
 async function main() {
@@ -107,42 +187,44 @@ async function main() {
     "1y": new Map(),
     "all": new Map(),
   };
+  const ranges: Record<Window, { min: number; max: number }> = {
+    "1w": { min: Infinity, max: 0 },
+    "1m": { min: Infinity, max: 0 },
+    "1y": { min: Infinity, max: 0 },
+    "all": { min: Infinity, max: 0 },
+  };
 
-  console.log(`refresh-leaderboard: targeting ${ROWS_TARGET.toLocaleString()} rows, page size ${PAGE_SIZE.toLocaleString()}`);
+  console.log(`refresh-leaderboard: target=${ROWS_TARGET.toLocaleString()} rows, page=${PAGE_SIZE.toLocaleString()}, keyset pagination via :id`);
   if (APP_TOKEN) console.log("using NYC_OPEN_DATA_APP_TOKEN");
+  console.log(`flush to redis every ${FLUSH_EVERY_PAGES} pages`);
+
+  // ttl is long because partial writes happen throughout; we want them to stick
+  const TTL = 60 * 60 * 48;
 
   let totalRows = 0;
   let pageIndex = 0;
-  let oldestSeenIso = "";
+  let cursor: string | null = null;
 
   while (totalRows < ROWS_TARGET) {
-    const offset = pageIndex * PAGE_SIZE;
     const pageStart = Date.now();
-    const rows = await fetchPage(offset);
+    const rows = await fetchPage(cursor);
     const pageMs = Date.now() - pageStart;
     if (rows.length === 0) {
       console.log("end of dataset reached.");
       break;
     }
+    let pageMinDate = Infinity;
+    let pageMaxDate = 0;
     for (const r of rows) {
       if (!r.plate || !r.state) continue;
-      // skip junk plates (missing/obscured/unknown) — these are tickets where
-      // the plate couldn't be read and would otherwise dominate the leaderboard
-      const plateUpper = r.plate.toUpperCase();
-      if (
-        plateUpper === "BLANK" ||
-        plateUpper === "BLANKPLATE" ||
-        plateUpper === "NONE" ||
-        plateUpper === "UNKNOWN" ||
-        plateUpper === "NOPLATE" ||
-        r.state === "99" ||
-        r.state === "XX"
-      ) {
-        continue;
-      }
+      if (isJunkPlate(r.plate, r.state)) continue;
       const key = `${r.state}|${r.plate}`;
       const fine = Number(r.fine_amount) || 0;
       const issuedAt = parseSodaDate(r.issue_date);
+      if (issuedAt > 0) {
+        if (issuedAt < pageMinDate) pageMinDate = issuedAt;
+        if (issuedAt > pageMaxDate) pageMaxDate = issuedAt;
+      }
       for (const w of WINDOWS) {
         if (issuedAt >= cutoffs[w]) {
           const m = aggs[w];
@@ -153,66 +235,49 @@ async function main() {
           } else {
             m.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
           }
+          if (issuedAt > 0) {
+            if (issuedAt < ranges[w].min) ranges[w].min = issuedAt;
+            if (issuedAt > ranges[w].max) ranges[w].max = issuedAt;
+          }
         }
-      }
-      if (r.issue_date && (!oldestSeenIso || r.issue_date < oldestSeenIso)) {
-        oldestSeenIso = r.issue_date;
       }
     }
     totalRows += rows.length;
     pageIndex += 1;
+    cursor = rows[rows.length - 1]?.[":id"] ?? null;
+    if (!cursor) {
+      console.log("no :id on last row — cannot continue, stopping.");
+      break;
+    }
     const elapsedS = Math.round((Date.now() - startedAt) / 1000);
+    const pageOldest = pageMinDate === Infinity ? "—" : toIsoDay(pageMinDate);
+    const pageNewest = pageMaxDate === 0 ? "—" : toIsoDay(pageMaxDate);
     console.log(
-      `page ${pageIndex}: +${rows.length.toLocaleString()} rows in ${pageMs}ms — total=${totalRows.toLocaleString()}, all-window plates=${aggs.all.size.toLocaleString()}, elapsed=${elapsedS}s`,
+      `p${pageIndex}: +${rows.length.toLocaleString()} in ${pageMs}ms  total=${totalRows.toLocaleString()}  all-plates=${aggs.all.size.toLocaleString()}  page-dates=${pageOldest}→${pageNewest}  elapsed=${elapsedS}s`,
     );
     if (rows.length < PAGE_SIZE) {
       console.log("partial page — end of dataset.");
       break;
     }
+    if (pageIndex % FLUSH_EVERY_PAGES === 0) {
+      const flushStart = Date.now();
+      await writeWindows(redis, aggs, ranges, totalRows, TTL);
+      console.log(`  ↳ flushed to redis (${Date.now() - flushStart}ms)`);
+    }
   }
 
-  // for each window: sort, take top 500, write to redis. also compute percentile buckets from the 'all' window.
-  const TTL = 60 * 60 * 26;
-  for (const w of WINDOWS) {
-    const sorted = [...aggs[w].values()].sort((a, b) => b.count - a.count);
-    const leaderboard = sorted.slice(0, 500).map((e, i) => ({
-      rank: i + 1,
-      plate: e.plate,
-      state: e.state,
-      violationCount: e.count,
-      totalFines: Math.round(e.fines * 100) / 100,
-    }));
-    await redis.set(`leaderboard:nyc:${w}`, leaderboard, { ex: TTL });
-    console.log(`leaderboard:nyc:${w}: ${leaderboard.length} entries, top plate=${leaderboard[0]?.plate ?? "—"} (${leaderboard[0]?.violationCount ?? 0})`);
-  }
-
-  // primary leaderboard key (used by /leaderboard/nyc and homepage when no window is selected)
-  // mirror the 1-month window so old keys keep working
-  const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
-  if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: TTL });
-
-  // percentile buckets derived from the broadest (all) window
-  const allCounts = [...aggs.all.values()].map((b) => b.count).sort((a, b) => a - b);
-  const percentiles = {
-    city: "nyc",
-    computedAt: new Date().toISOString(),
-    totalPlatesObserved: allCounts.length,
-    buckets: {
-      p50: Math.max(2, percentile(allCounts, 50)),
-      p75: Math.max(3, percentile(allCounts, 75)),
-      p90: Math.max(5, percentile(allCounts, 90)),
-      p95: Math.max(10, percentile(allCounts, 95)),
-      p99: Math.max(25, percentile(allCounts, 99)),
-    },
-  };
-  await redis.set("percentiles:nyc", percentiles, { ex: TTL });
+  await writeWindows(redis, aggs, ranges, totalRows, TTL);
 
   const elapsedS = Math.round((Date.now() - startedAt) / 1000);
-  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned. oldest issue_date in window: ${oldestSeenIso || "—"}.`);
-  console.log(`percentile buckets:`, percentiles.buckets);
+  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned.`);
+  for (const w of WINDOWS) {
+    const oldest = ranges[w].min === Infinity ? "—" : toIsoDay(ranges[w].min);
+    const newest = ranges[w].max === 0 ? "—" : toIsoDay(ranges[w].max);
+    console.log(`  ${w}: ${aggs[w].size.toLocaleString()} unique plates, dates ${oldest} → ${newest}`);
+  }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("fatal:", err);
   process.exit(1);
 });

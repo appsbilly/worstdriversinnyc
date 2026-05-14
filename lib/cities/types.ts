@@ -38,6 +38,15 @@ export interface LeaderboardEntry {
   totalFines: number;
 }
 
+export interface LeaderboardMeta {
+  window: "1w" | "1m" | "1y" | "all";
+  computedAt: string;
+  oldestIssueDate: string;
+  newestIssueDate: string;
+  rowsScanned: number;
+  uniquePlates: number;
+}
+
 export interface PercentileBuckets {
   city: string;
   computedAt: string;
@@ -57,6 +66,7 @@ export interface CityAdapter {
   cityPortalUrl: string;
   lookup(plate: string, state: string): Promise<PlateLookupResult>;
   getLeaderboard(limit: number, window?: LeaderboardWindow): Promise<LeaderboardEntry[]>;
+  getLeaderboardMeta?(window: LeaderboardWindow): Promise<LeaderboardMeta | null>;
   getPercentile(violationCount: number): Promise<number>;
 }
 

@@ -4,6 +4,7 @@ import {
   CityAdapter,
   InvalidPlateError,
   LeaderboardEntry,
+  LeaderboardMeta,
   LeaderboardWindow,
   PercentileBuckets,
   PlateLookupResult,
@@ -299,6 +300,13 @@ async function getLeaderboard(
   return [];
 }
 
+async function getLeaderboardMeta(
+  window: LeaderboardWindow,
+): Promise<LeaderboardMeta | null> {
+  const key = `leaderboard:nyc:${window}:meta`;
+  return (await cacheGet<LeaderboardMeta>(key)) ?? null;
+}
+
 function defaultBuckets(): PercentileBuckets {
   return {
     city: "nyc",
@@ -370,5 +378,6 @@ export const nycAdapter: CityAdapter = {
   cityPortalUrl: NYC_PORTAL,
   lookup,
   getLeaderboard,
+  getLeaderboardMeta,
   getPercentile,
 };

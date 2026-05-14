@@ -62,11 +62,30 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
 
   const window = parseWindow(searchParams.window);
   let entries: Awaited<ReturnType<typeof city.getLeaderboard>> = [];
+  let meta: Awaited<ReturnType<NonNullable<typeof city.getLeaderboardMeta>>> | null = null;
   try {
     entries = await city.getLeaderboard(100, window);
   } catch {
     entries = [];
   }
+  if (city.getLeaderboardMeta) {
+    try {
+      meta = await city.getLeaderboardMeta(window);
+    } catch {
+      meta = null;
+    }
+  }
+
+  function fmtIso(iso: string): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(d);
+  }
+  const range =
+    meta?.oldestIssueDate && meta?.newestIssueDate
+      ? `${fmtIso(meta.oldestIssueDate)} → ${fmtIso(meta.newestIssueDate)}`
+      : null;
 
   return (
     <div className="container py-10 max-w-5xl">
@@ -86,6 +105,12 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
           active={window}
         />
       </div>
+      {range ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          data window: <span className="text-foreground">{range}</span>
+          {meta?.rowsScanned ? ` · ${meta.rowsScanned.toLocaleString()} tickets scanned` : null}
+        </p>
+      ) : null}
       <div className="mt-6">
         <Leaderboard entries={entries} city={city.id} />
       </div>
