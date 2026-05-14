@@ -4,6 +4,7 @@ import {
   CityAdapter,
   InvalidPlateError,
   LeaderboardEntry,
+  LeaderboardWindow,
   PercentileBuckets,
   PlateLookupResult,
   UpstreamApiError,
@@ -285,13 +286,16 @@ async function fetchLeaderboardFresh(limit: number): Promise<LeaderboardEntry[]>
   }));
 }
 
-async function getLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
-  const key = `leaderboard:nyc`;
+async function getLeaderboard(
+  limit: number,
+  window: LeaderboardWindow = "1m",
+): Promise<LeaderboardEntry[]> {
+  const key = `leaderboard:nyc:${window}`;
   const cached = await cacheGet<LeaderboardEntry[]>(key);
   if (cached && cached.length) return cached.slice(0, limit);
-  // No cached value. Pages render against cache-only; the daily cron is what
-  // populates redis via fetchLeaderboardFresh. Returning [] here keeps page
-  // renders fast — the heavy SODA aggregate is run by /api/cron/leaderboard.
+  // Fallback to the legacy un-windowed key for transition.
+  const legacy = await cacheGet<LeaderboardEntry[]>(`leaderboard:nyc`);
+  if (legacy && legacy.length) return legacy.slice(0, limit);
   return [];
 }
 

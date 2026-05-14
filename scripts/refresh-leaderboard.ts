@@ -1,35 +1,42 @@
 /**
- * Refresh the NYC plate leaderboard + percentile buckets in Upstash Redis.
+ * Refresh NYC plate leaderboards + percentile buckets in Upstash Redis.
  *
- * Runs from GitHub Actions (or locally) — no Vercel 60s function cap.
- * Paginates the SODA dataset, aggregates plate counts in memory, writes
- * top 500 + percentile buckets to Redis under the same keys the website reads.
+ * One pass through the SODA dataset, four time-windowed leaderboards
+ * (1w / 1m / 1y / all). Runs from GitHub Actions — no Vercel 60s cap.
  *
  * env vars:
  *   UPSTASH_REDIS_REST_URL       (required)
  *   UPSTASH_REDIS_REST_TOKEN     (required)
- *   NYC_OPEN_DATA_APP_TOKEN      (optional but recommended — raises throttle limit)
- *   ROWS_TARGET                  (optional — default 5,000,000)
+ *   NYC_OPEN_DATA_APP_TOKEN      (optional but recommended)
+ *   ROWS_TARGET                  (optional — default 10,000,000)
  */
 import { Redis } from "@upstash/redis";
 
 const SODA_BASE = "https://data.cityofnewyork.us/resource/nc67-uf89.json";
 const PAGE_SIZE = 50_000;
-const ROWS_TARGET = Number(process.env.ROWS_TARGET || 5_000_000);
+const ROWS_TARGET = Number(process.env.ROWS_TARGET || 10_000_000);
 const APP_TOKEN = process.env.NYC_OPEN_DATA_APP_TOKEN;
-const PAGE_TIMEOUT_MS = 120_000;
+const PAGE_TIMEOUT_MS = 180_000;
 const MAX_RETRIES = 4;
 
-type Row = { plate?: string; state?: string; fine_amount?: string };
+type Window = "1w" | "1m" | "1y" | "all";
+const WINDOWS: Window[] = ["1w", "1m", "1y", "all"];
+
+type Row = { plate?: string; state?: string; fine_amount?: string; issue_date?: string };
 type Bucket = { plate: string; state: string; count: number; fines: number };
 
-async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function parseSodaDate(input: string | undefined): number {
+  if (!input) return 0;
+  // SODA returns either MM/DD/YYYY or full ISO. Date.parse handles both well enough.
+  const t = Date.parse(input);
+  return Number.isFinite(t) ? t : 0;
 }
 
 async function fetchPage(offset: number): Promise<Row[]> {
   const url = new URL(SODA_BASE);
-  url.searchParams.set("$select", "plate,state,fine_amount");
+  url.searchParams.set("$select", "plate,state,fine_amount,issue_date");
   url.searchParams.set("$limit", String(PAGE_SIZE));
   url.searchParams.set("$offset", String(offset));
   url.searchParams.set("$order", ":id DESC");
@@ -63,9 +70,7 @@ async function fetchPage(offset: number): Promise<Row[]> {
       lastErr = err;
       const wait = 2000 * Math.pow(2, attempt);
       console.warn(`  fetch failed on offset=${offset}, attempt=${attempt + 1}:`, err instanceof Error ? err.message : err);
-      if (attempt < MAX_RETRIES) {
-        await sleep(wait);
-      }
+      if (attempt < MAX_RETRIES) await sleep(wait);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("page fetch exhausted retries");
@@ -87,12 +92,28 @@ async function main() {
   const redis = new Redis({ url, token });
 
   const startedAt = Date.now();
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const cutoffs: Record<Window, number> = {
+    "1w": now - 7 * DAY,
+    "1m": now - 30 * DAY,
+    "1y": now - 365 * DAY,
+    "all": 0,
+  };
+
+  const aggs: Record<Window, Map<string, Bucket>> = {
+    "1w": new Map(),
+    "1m": new Map(),
+    "1y": new Map(),
+    "all": new Map(),
+  };
+
   console.log(`refresh-leaderboard: targeting ${ROWS_TARGET.toLocaleString()} rows, page size ${PAGE_SIZE.toLocaleString()}`);
   if (APP_TOKEN) console.log("using NYC_OPEN_DATA_APP_TOKEN");
 
-  const buckets = new Map<string, Bucket>();
   let totalRows = 0;
   let pageIndex = 0;
+  let oldestSeenIso = "";
 
   while (totalRows < ROWS_TARGET) {
     const offset = pageIndex * PAGE_SIZE;
@@ -105,21 +126,44 @@ async function main() {
     }
     for (const r of rows) {
       if (!r.plate || !r.state) continue;
+      // skip junk plates (missing/obscured/unknown) — these are tickets where
+      // the plate couldn't be read and would otherwise dominate the leaderboard
+      const plateUpper = r.plate.toUpperCase();
+      if (
+        plateUpper === "BLANK" ||
+        plateUpper === "BLANKPLATE" ||
+        plateUpper === "NONE" ||
+        plateUpper === "UNKNOWN" ||
+        plateUpper === "NOPLATE" ||
+        r.state === "99" ||
+        r.state === "XX"
+      ) {
+        continue;
+      }
       const key = `${r.state}|${r.plate}`;
       const fine = Number(r.fine_amount) || 0;
-      const existing = buckets.get(key);
-      if (existing) {
-        existing.count += 1;
-        existing.fines += fine;
-      } else {
-        buckets.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
+      const issuedAt = parseSodaDate(r.issue_date);
+      for (const w of WINDOWS) {
+        if (issuedAt >= cutoffs[w]) {
+          const m = aggs[w];
+          const existing = m.get(key);
+          if (existing) {
+            existing.count += 1;
+            existing.fines += fine;
+          } else {
+            m.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
+          }
+        }
+      }
+      if (r.issue_date && (!oldestSeenIso || r.issue_date < oldestSeenIso)) {
+        oldestSeenIso = r.issue_date;
       }
     }
     totalRows += rows.length;
     pageIndex += 1;
     const elapsedS = Math.round((Date.now() - startedAt) / 1000);
     console.log(
-      `page ${pageIndex}: +${rows.length.toLocaleString()} rows in ${pageMs}ms — total=${totalRows.toLocaleString()}, unique plates=${buckets.size.toLocaleString()}, elapsed=${elapsedS}s`,
+      `page ${pageIndex}: +${rows.length.toLocaleString()} rows in ${pageMs}ms — total=${totalRows.toLocaleString()}, all-window plates=${aggs.all.size.toLocaleString()}, elapsed=${elapsedS}s`,
     );
     if (rows.length < PAGE_SIZE) {
       console.log("partial page — end of dataset.");
@@ -127,42 +171,45 @@ async function main() {
     }
   }
 
-  // sort all plates by count desc — used for both leaderboard slice and percentile distribution
-  const sorted = [...buckets.values()].sort((a, b) => b.count - a.count);
-  const leaderboard = sorted.slice(0, 500).map((e, i) => ({
-    rank: i + 1,
-    plate: e.plate,
-    state: e.state,
-    violationCount: e.count,
-    totalFines: Math.round(e.fines * 100) / 100,
-  }));
+  // for each window: sort, take top 500, write to redis. also compute percentile buckets from the 'all' window.
+  const TTL = 60 * 60 * 26;
+  for (const w of WINDOWS) {
+    const sorted = [...aggs[w].values()].sort((a, b) => b.count - a.count);
+    const leaderboard = sorted.slice(0, 500).map((e, i) => ({
+      rank: i + 1,
+      plate: e.plate,
+      state: e.state,
+      violationCount: e.count,
+      totalFines: Math.round(e.fines * 100) / 100,
+    }));
+    await redis.set(`leaderboard:nyc:${w}`, leaderboard, { ex: TTL });
+    console.log(`leaderboard:nyc:${w}: ${leaderboard.length} entries, top plate=${leaderboard[0]?.plate ?? "—"} (${leaderboard[0]?.violationCount ?? 0})`);
+  }
 
-  const countsAsc = sorted.map((b) => b.count).sort((a, b) => a - b);
+  // primary leaderboard key (used by /leaderboard/nyc and homepage when no window is selected)
+  // mirror the 1-month window so old keys keep working
+  const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
+  if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: TTL });
+
+  // percentile buckets derived from the broadest (all) window
+  const allCounts = [...aggs.all.values()].map((b) => b.count).sort((a, b) => a - b);
   const percentiles = {
     city: "nyc",
     computedAt: new Date().toISOString(),
-    totalPlatesObserved: countsAsc.length,
+    totalPlatesObserved: allCounts.length,
     buckets: {
-      p50: Math.max(2, percentile(countsAsc, 50)),
-      p75: Math.max(3, percentile(countsAsc, 75)),
-      p90: Math.max(5, percentile(countsAsc, 90)),
-      p95: Math.max(10, percentile(countsAsc, 95)),
-      p99: Math.max(25, percentile(countsAsc, 99)),
+      p50: Math.max(2, percentile(allCounts, 50)),
+      p75: Math.max(3, percentile(allCounts, 75)),
+      p90: Math.max(5, percentile(allCounts, 90)),
+      p95: Math.max(10, percentile(allCounts, 95)),
+      p99: Math.max(25, percentile(allCounts, 99)),
     },
   };
-
-  // 26h TTL — slightly longer than the daily run interval so we don't blip empty
-  const TTL = 60 * 60 * 26;
-  await redis.set("leaderboard:nyc", leaderboard, { ex: TTL });
   await redis.set("percentiles:nyc", percentiles, { ex: TTL });
 
   const elapsedS = Math.round((Date.now() - startedAt) / 1000);
-  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned, ${countsAsc.length.toLocaleString()} unique plates.`);
+  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned. oldest issue_date in window: ${oldestSeenIso || "—"}.`);
   console.log(`percentile buckets:`, percentiles.buckets);
-  console.log(`\ntop 10:`);
-  for (const e of leaderboard.slice(0, 10)) {
-    console.log(`  ${String(e.rank).padStart(3)}. ${e.plate.padEnd(8)} ${e.state}  ${String(e.violationCount).padStart(5)} tickets  $${e.totalFines.toLocaleString()}`);
-  }
 }
 
 main().catch((err) => {

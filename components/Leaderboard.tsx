@@ -13,7 +13,7 @@ interface LeaderboardProps {
 }
 
 export function Leaderboard({ entries, city, compact = false }: LeaderboardProps) {
-  const [reveal, setReveal] = useState(false);
+  const [reveal, setReveal] = useState(true);
   const rows = compact ? entries.slice(0, 10) : entries;
 
   if (entries.length === 0) {
@@ -35,7 +35,7 @@ export function Leaderboard({ entries, city, compact = false }: LeaderboardProps
           onClick={() => setReveal((r) => !r)}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
-          {reveal ? "anonymize" : "reveal plates"}
+          {reveal ? "anonymize plates" : "reveal plates"}
         </button>
       </div>
       <div className="overflow-x-auto">

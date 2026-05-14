@@ -46,6 +46,8 @@ export interface PercentileBuckets {
   buckets: Record<"p50" | "p75" | "p90" | "p95" | "p99", number>;
 }
 
+export type LeaderboardWindow = "1w" | "1m" | "1y" | "all";
+
 export interface CityAdapter {
   id: string;
   name: string;
@@ -54,7 +56,7 @@ export interface CityAdapter {
   supportedStates: string[];
   cityPortalUrl: string;
   lookup(plate: string, state: string): Promise<PlateLookupResult>;
-  getLeaderboard(limit: number): Promise<LeaderboardEntry[]>;
+  getLeaderboard(limit: number, window?: LeaderboardWindow): Promise<LeaderboardEntry[]>;
   getPercentile(violationCount: number): Promise<number>;
 }
 

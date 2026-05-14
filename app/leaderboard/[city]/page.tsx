@@ -1,14 +1,30 @@
 import { Leaderboard } from "@/components/Leaderboard";
+import { WindowTabs } from "@/components/WindowTabs";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { getCity } from "@/lib/cities";
+import { LeaderboardWindow } from "@/lib/cities/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export const revalidate = 3600;
+export const revalidate = 1800;
 
 interface PageProps {
   params: { city: string };
+  searchParams: { window?: string };
+}
+
+const WINDOWS: LeaderboardWindow[] = ["1w", "1m", "1y", "all"];
+const WINDOW_LABELS: Record<LeaderboardWindow, string> = {
+  "1w": "1 week",
+  "1m": "1 month",
+  "1y": "1 year",
+  "all": "all time",
+};
+
+function parseWindow(input: string | undefined): LeaderboardWindow {
+  if (input && (WINDOWS as string[]).includes(input)) return input as LeaderboardWindow;
+  return "1m";
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -20,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function LeaderboardPage({ params }: PageProps) {
+export default async function LeaderboardPage({ params, searchParams }: PageProps) {
   const city = getCity(params.city);
   if (!city) notFound();
 
@@ -44,9 +60,10 @@ export default async function LeaderboardPage({ params }: PageProps) {
     );
   }
 
+  const window = parseWindow(searchParams.window);
   let entries: Awaited<ReturnType<typeof city.getLeaderboard>> = [];
   try {
-    entries = await city.getLeaderboard(100);
+    entries = await city.getLeaderboard(100, window);
   } catch {
     entries = [];
   }
@@ -60,11 +77,16 @@ export default async function LeaderboardPage({ params }: PageProps) {
         the worst plates in {city.shortName.toLowerCase()}.
       </h1>
       <p className="mt-2 max-w-xl text-muted-foreground">
-        ranked by ticket activity in the most recent slice of nyc's open-data
-        feed. plates are anonymized by default. tap reveal to view, or look up
-        a specific plate.
+        ranked by ticket count from nyc's open-data feed over the selected window.
       </p>
-      <div className="mt-8">
+      <div className="mt-6">
+        <WindowTabs
+          basePath={`/leaderboard/${city.id}`}
+          windows={WINDOWS.map((w) => ({ value: w, label: WINDOW_LABELS[w] }))}
+          active={window}
+        />
+      </div>
+      <div className="mt-6">
         <Leaderboard entries={entries} city={city.id} />
       </div>
     </div>
