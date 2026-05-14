@@ -3,15 +3,34 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { nycAdapter } from "@/lib/cities/nyc";
 import Link from "next/link";
 
-export const revalidate = 3600;
+export const revalidate = 1800;
+
+function fmtIso(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(d);
+}
 
 export default async function HomePage() {
   let top: Awaited<ReturnType<typeof nycAdapter.getLeaderboard>> = [];
+  let meta: Awaited<ReturnType<NonNullable<typeof nycAdapter.getLeaderboardMeta>>> | null = null;
   try {
-    top = await nycAdapter.getLeaderboard(10);
+    top = await nycAdapter.getLeaderboard(10, "1m");
   } catch {
     top = [];
   }
+  if (nycAdapter.getLeaderboardMeta) {
+    try {
+      meta = await nycAdapter.getLeaderboardMeta("1m");
+    } catch {
+      meta = null;
+    }
+  }
+  const range =
+    meta?.oldestIssueDate && meta?.newestIssueDate
+      ? `${fmtIso(meta.oldestIssueDate)} → ${fmtIso(meta.newestIssueDate)}`
+      : null;
 
   return (
     <div className="container py-10 md:py-16">
@@ -37,10 +56,10 @@ export default async function HomePage() {
         <div className="mb-4 flex items-end justify-between">
           <div>
             <h2 className="font-serif text-3xl font-bold tracking-tight md:text-4xl">
-              today's worst plates in nyc
+              worst plates · last 30 days
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              based on recent ticket activity. refreshed daily.
+              {range ? <>tickets issued <span className="text-foreground">{range}</span></> : "refreshed daily from nyc open data"}
             </p>
           </div>
           <Link
