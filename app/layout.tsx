@@ -84,7 +84,6 @@ function SiteHeader() {
 }
 
 function SiteFooter() {
-  const dmca = process.env.DMCA_CONTACT_EMAIL || "takedowns@platerank.com";
   return (
     <footer className="mt-16 border-t border-border">
       <div className="container py-8 text-xs text-muted-foreground flex flex-col gap-2 md:flex-row md:justify-between">
@@ -92,10 +91,9 @@ function SiteFooter() {
           public data from city open-data portals. not affiliated with any city agency.
         </p>
         <p>
-          dmca/takedown:{" "}
-          <a href={`mailto:${dmca}`} className="underline hover:text-foreground">
-            {dmca}
-          </a>
+          <Link href="/methodology" className="underline hover:text-foreground">
+            methodology &amp; takedowns
+          </Link>
         </p>
       </div>
     </footer>

@@ -6,7 +6,6 @@ export const metadata: Metadata = {
 };
 
 export default function MethodologyPage() {
-  const dmca = process.env.DMCA_CONTACT_EMAIL || "takedowns@platerank.com";
   return (
     <article className="container max-w-2xl py-12 prose-neutral">
       <h1 className="font-serif text-4xl font-bold tracking-tight md:text-5xl">methodology</h1>
@@ -82,11 +81,9 @@ export default function MethodologyPage() {
           harassment, stalking, or commercial resale violates our terms.
         </p>
         <p className="mt-3">
-          credible takedown requests are responded to within 48 hours. email{" "}
-          <a className="underline" href={`mailto:${dmca}`}>
-            {dmca}
-          </a>
-          .
+          if you believe a record should be removed, file a takedown request through
+          the underlying open-data portal — that is the system of record, and any
+          correction propagates here on the next refresh.
         </p>
       </Section>
     </article>
