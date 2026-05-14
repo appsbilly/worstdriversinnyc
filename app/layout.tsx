@@ -69,8 +69,13 @@ function SiteHeader() {
           <Link href="/leaderboard/nyc" className="hover:text-foreground">
             leaderboard
           </Link>
-          <Link href="/methodology" className="hover:text-foreground">
-            methodology
+          <Link
+            href="/methodology"
+            aria-label="methodology"
+            title="methodology"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground transition hover:border-foreground/40 hover:text-foreground"
+          >
+            ?
           </Link>
         </nav>
       </div>
