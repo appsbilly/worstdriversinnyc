@@ -40,7 +40,7 @@ export default async function HomePage() {
               today's worst plates in nyc
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              refreshed daily from nyc open data.
+              based on recent ticket activity. refreshed daily.
             </p>
           </div>
           <Link

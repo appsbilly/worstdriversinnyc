@@ -60,8 +60,9 @@ export default async function LeaderboardPage({ params }: PageProps) {
         the worst plates in {city.shortName.toLowerCase()}.
       </h1>
       <p className="mt-2 max-w-xl text-muted-foreground">
-        ranked by total parking + camera violations in the city's open-data dataset.
-        plates are anonymized by default. tap reveal to view, or look up a specific one.
+        ranked by ticket activity in the most recent slice of nyc's open-data
+        feed. plates are anonymized by default. tap reveal to view, or look up
+        a specific plate.
       </p>
       <div className="mt-8">
         <Leaderboard entries={entries} city={city.id} />

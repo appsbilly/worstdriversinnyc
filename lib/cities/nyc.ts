@@ -242,31 +242,53 @@ async function lookup(plate: string, state: string): Promise<PlateLookupResult> 
   return fresh;
 }
 
-type LeaderboardRow = { plate?: string; state?: string; ct?: string; fines?: string };
+type RecentRow = { plate?: string; state?: string; fine_amount?: string };
 
 async function fetchLeaderboardFresh(limit: number): Promise<LeaderboardEntry[]> {
-  const rows = await sodaFetch<LeaderboardRow[]>({
-    searchParams: {
-      $select: "plate,state,count(*) as ct,sum(fine_amount) as fines",
-      $group: "plate,state",
-      $order: "ct DESC",
-      $limit: String(Math.max(1, Math.min(limit, 500))),
-    },
-    timeoutMs: 30_000,
-  });
-  const out: LeaderboardEntry[] = [];
-  let rank = 1;
-  for (const r of rows) {
-    if (!r.plate || !r.state) continue;
-    out.push({
-      rank: rank++,
-      plate: r.plate,
-      state: r.state,
-      violationCount: Number(r.ct) || 0,
-      totalFines: Math.round((Number(r.fines) || 0) * 100) / 100,
+  // SODA can't GROUP BY across the whole table within a 60s function budget.
+  // Instead: pull the most recent N violations, aggregate by plate in memory.
+  // Trade-off — leaderboard reflects recent ticket activity (last ~weeks of NYC
+  // enforcement), not all-time totals. This is also more newsworthy: it ranks
+  // who's actively driving badly, not who racked up tickets a decade ago.
+  const PAGE_SIZE = 10_000;
+  const MAX_PAGES = 4; // ~40k most-recent violations
+  type Bucket = { plate: string; state: string; count: number; fines: number };
+  const buckets = new Map<string, Bucket>();
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const rows = await sodaFetch<RecentRow[]>({
+      searchParams: {
+        $select: "plate,state,fine_amount",
+        $limit: String(PAGE_SIZE),
+        $offset: String(page * PAGE_SIZE),
+        $order: "issue_date DESC",
+      },
+      timeoutMs: 25_000,
     });
+    if (!rows.length) break;
+    for (const r of rows) {
+      if (!r.plate || !r.state) continue;
+      const key = `${r.state}|${r.plate}`;
+      const fine = Number(r.fine_amount) || 0;
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.fines += fine;
+      } else {
+        buckets.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
+      }
+    }
+    if (rows.length < PAGE_SIZE) break;
   }
-  return out;
+
+  const sorted = [...buckets.values()].sort((a, b) => b.count - a.count);
+  return sorted.slice(0, Math.max(1, Math.min(limit, 500))).map((e, i) => ({
+    rank: i + 1,
+    plate: e.plate,
+    state: e.state,
+    violationCount: e.count,
+    totalFines: Math.round(e.fines * 100) / 100,
+  }));
 }
 
 async function getLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
