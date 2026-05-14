@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+
+    --border: 0 0% 90%;
+
+    --accent: 18 100% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --ok: 142 71% 38%;
+    --warn: 38 92% 50%;
+    --danger: 0 84% 52%;
+
+    --radius: 0.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 0 0% 7%;
+      --foreground: 0 0% 96%;
+      --muted: 0 0% 14%;
+      --muted-foreground: 0 0% 60%;
+      --border: 0 0% 18%;
+      --accent: 18 100% 60%;
+      --accent-foreground: 0 0% 100%;
+      --ok: 142 71% 45%;
+      --warn: 38 92% 55%;
+      --danger: 0 84% 60%;
+    }
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+}
+
+@layer components {
+  .plate-frame {
+    @apply relative inline-flex items-center justify-center rounded-md border-4 border-foreground/80 bg-white px-6 py-3 font-mono text-3xl font-black tracking-widest text-black shadow-sm;
+    background-image: linear-gradient(180deg, #fefefe 0%, #f1f1f1 100%);
+  }
+
+  .plate-frame--ny {
+    @apply border-[#FF6B35];
+  }
+
+  .stat-hero {
+    @apply font-serif text-6xl font-bold leading-none tracking-tight md:text-8xl;
+  }
+
+  .stat-num {
+    @apply font-serif text-4xl font-bold tracking-tight md:text-5xl;
+  }
+}

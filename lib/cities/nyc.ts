@@ -1,0 +1,354 @@
+import { cacheGet, cacheSet, TTL } from "../cache";
+import { normalizePlate, normalizeState } from "../format";
+import {
+  CityAdapter,
+  InvalidPlateError,
+  LeaderboardEntry,
+  PercentileBuckets,
+  PlateLookupResult,
+  UpstreamApiError,
+  Violation,
+} from "./types";
+
+const SODA_BASE = "https://data.cityofnewyork.us/resource/nc67-uf89.json";
+const NYC_PORTAL = "https://www.nyc.gov/site/finance/vehicles/services-violations.page";
+
+type SodaRow = {
+  plate?: string;
+  state?: string;
+  license_type?: string;
+  summons_number?: string;
+  issue_date?: string;
+  violation?: string;
+  violation_status?: string;
+  fine_amount?: string;
+  penalty_amount?: string;
+  interest_amount?: string;
+  reduction_amount?: string;
+  payment_amount?: string;
+  amount_due?: string;
+  precinct?: string;
+  county?: string;
+  issuing_agency?: string;
+  judgment_entry_date?: string;
+  summons_image?: { url?: string; description?: string };
+};
+
+function n(v: string | undefined): number {
+  if (!v) return 0;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
+
+function deriveStatus(row: SodaRow): Violation["status"] {
+  const due = n(row.amount_due);
+  const paid = n(row.payment_amount);
+  if (row.violation_status && /dispute|hearing pending/i.test(row.violation_status)) {
+    return "in_dispute";
+  }
+  if (due === 0 && paid > 0) return "paid";
+  if (due > 0) return "unpaid";
+  if (due === 0 && paid === 0 && n(row.fine_amount) === 0) return "unknown";
+  if (due === 0) return "paid";
+  return "unknown";
+}
+
+function toIsoDate(input: string | undefined): string {
+  if (!input) return "";
+  // SODA returns either MM/DD/YYYY or a full ISO string for some columns.
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(input);
+  if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+  // already ISO-ish — let Date parse it and re-emit yyyy-mm-dd
+  const d = new Date(input);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return input;
+}
+
+function toViolation(row: SodaRow): Violation {
+  const fineAmount = n(row.fine_amount) + n(row.penalty_amount) + n(row.interest_amount) - n(row.reduction_amount);
+  const amountPaid = n(row.payment_amount);
+  const amountDue = n(row.amount_due);
+  const locationParts = [row.precinct, row.county].filter(Boolean);
+  return {
+    id: row.summons_number || `${row.plate}-${row.issue_date}-${row.violation}`,
+    issueDate: toIsoDate(row.issue_date),
+    violationType: humanizeViolation(row.violation || "Unknown violation"),
+    location: locationParts.length ? locationParts.join(", ") : undefined,
+    fineAmount: Math.max(0, Math.round(fineAmount * 100) / 100),
+    amountPaid: Math.round(amountPaid * 100) / 100,
+    amountDue: Math.round(amountDue * 100) / 100,
+    status: deriveStatus(row),
+    imageUrl: row.summons_image?.url,
+    issuingAgency: row.issuing_agency,
+    precinct: row.precinct,
+  };
+}
+
+function humanizeViolation(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\bphto\b/g, "photo")
+    .replace(/\bzn\b/g, "zone")
+    .replace(/\bspd\b/g, "speed")
+    .replace(/\bviol\b/g, "violation")
+    .replace(/\bno standing\b/gi, "no standing")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+interface SodaFetchOptions {
+  searchParams: Record<string, string>;
+  retries?: number;
+  timeoutMs?: number;
+}
+
+async function sodaFetch<T>({
+  searchParams,
+  retries = 3,
+  timeoutMs = 12_000,
+}: SodaFetchOptions): Promise<T> {
+  const token = process.env.NYC_OPEN_DATA_APP_TOKEN;
+  const url = new URL(SODA_BASE);
+  for (const [k, v] of Object.entries(searchParams)) url.searchParams.set(k, v);
+
+  let attempt = 0;
+  let lastError: unknown;
+  while (attempt <= retries) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url.toString(), {
+        headers: {
+          "Accept": "application/json",
+          ...(token ? { "X-App-Token": token } : {}),
+        },
+        signal: controller.signal,
+        // server-only fetch — let upstream's CDN cache as it sees fit
+        cache: "no-store",
+      });
+      clearTimeout(timer);
+
+      if (res.status === 429) {
+        const wait = 500 * Math.pow(2, attempt) + Math.random() * 250;
+        await new Promise((r) => setTimeout(r, wait));
+        attempt += 1;
+        continue;
+      }
+      if (res.status >= 500) {
+        if (attempt < retries) {
+          const wait = 400 * Math.pow(2, attempt);
+          await new Promise((r) => setTimeout(r, wait));
+          attempt += 1;
+          continue;
+        }
+        throw new UpstreamApiError(res.status, `SODA ${res.status}`);
+      }
+      if (!res.ok) {
+        throw new UpstreamApiError(res.status, `SODA error ${res.status}`);
+      }
+      return (await res.json()) as T;
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+      if (attempt < retries) {
+        const wait = 400 * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, wait));
+        attempt += 1;
+        continue;
+      }
+      break;
+    }
+  }
+  if (lastError instanceof UpstreamApiError) throw lastError;
+  throw new UpstreamApiError(0, `SODA fetch failed: ${(lastError as Error)?.message || "unknown"}`);
+}
+
+async function fetchAllViolationsForPlate(plate: string, state: string): Promise<SodaRow[]> {
+  const PAGE = 1000;
+  const HARD_CAP = 5000;
+  const out: SodaRow[] = [];
+  let offset = 0;
+  while (out.length < HARD_CAP) {
+    const rows = await sodaFetch<SodaRow[]>({
+      searchParams: {
+        plate,
+        state,
+        $limit: String(PAGE),
+        $offset: String(offset),
+        $order: "issue_date DESC",
+      },
+    });
+    if (!rows.length) break;
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+    offset += PAGE;
+  }
+  return out;
+}
+
+async function fetchLookupFresh(plate: string, state: string): Promise<PlateLookupResult> {
+  const normPlate = normalizePlate(plate);
+  const normState = normalizeState(state);
+  if (!normPlate) throw new InvalidPlateError();
+
+  // primary query, then a "T"-prefix variant for temp plates if no results
+  let rows = await fetchAllViolationsForPlate(normPlate, normState);
+  if (rows.length === 0 && !normPlate.startsWith("T")) {
+    const alt = await fetchAllViolationsForPlate(`T${normPlate}`, normState);
+    if (alt.length > 0) rows = alt;
+  }
+
+  const violations = rows.map(toViolation);
+  violations.sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
+
+  let paid = 0;
+  let unpaid = 0;
+  let totalIssued = 0;
+  let totalPaid = 0;
+  let totalDue = 0;
+  for (const v of violations) {
+    if (v.status === "paid") paid += 1;
+    else if (v.status === "unpaid") unpaid += 1;
+    totalIssued += v.fineAmount;
+    totalPaid += v.amountPaid;
+    totalDue += v.amountDue;
+  }
+
+  return {
+    city: "nyc",
+    plate: normPlate,
+    state: normState,
+    totalViolations: violations.length,
+    totalPaid: paid,
+    totalUnpaid: unpaid,
+    totalFinesIssued: Math.round(totalIssued * 100) / 100,
+    totalFinesPaid: Math.round(totalPaid * 100) / 100,
+    totalFinesOutstanding: Math.round(totalDue * 100) / 100,
+    firstViolationDate: violations.length ? violations[violations.length - 1]!.issueDate : undefined,
+    lastViolationDate: violations.length ? violations[0]!.issueDate : undefined,
+    violations,
+    cityPortalUrl: NYC_PORTAL,
+  };
+}
+
+async function lookup(plate: string, state: string): Promise<PlateLookupResult> {
+  const normPlate = normalizePlate(plate);
+  const normState = normalizeState(state);
+  if (!normPlate) throw new InvalidPlateError();
+  const key = `lookup:nyc:${normState}:${normPlate}`;
+  const cached = await cacheGet<PlateLookupResult>(key);
+  if (cached) return cached;
+  const fresh = await fetchLookupFresh(normPlate, normState);
+  await cacheSet(key, fresh, TTL.LOOKUP);
+  return fresh;
+}
+
+type LeaderboardRow = { plate?: string; state?: string; ct?: string; fines?: string };
+
+async function fetchLeaderboardFresh(limit: number): Promise<LeaderboardEntry[]> {
+  const rows = await sodaFetch<LeaderboardRow[]>({
+    searchParams: {
+      $select: "plate,state,count(*) as ct,sum(fine_amount) as fines",
+      $group: "plate,state",
+      $order: "ct DESC",
+      $limit: String(Math.max(1, Math.min(limit, 500))),
+    },
+    timeoutMs: 30_000,
+  });
+  const out: LeaderboardEntry[] = [];
+  let rank = 1;
+  for (const r of rows) {
+    if (!r.plate || !r.state) continue;
+    out.push({
+      rank: rank++,
+      plate: r.plate,
+      state: r.state,
+      violationCount: Number(r.ct) || 0,
+      totalFines: Math.round((Number(r.fines) || 0) * 100) / 100,
+    });
+  }
+  return out;
+}
+
+async function getLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
+  const key = `leaderboard:nyc`;
+  const cached = await cacheGet<LeaderboardEntry[]>(key);
+  if (cached && cached.length) return cached.slice(0, limit);
+  // No cached value. Pages render against cache-only; the daily cron is what
+  // populates redis via fetchLeaderboardFresh. Returning [] here keeps page
+  // renders fast — the heavy SODA aggregate is run by /api/cron/leaderboard.
+  return [];
+}
+
+function defaultBuckets(): PercentileBuckets {
+  return {
+    city: "nyc",
+    computedAt: new Date().toISOString(),
+    totalPlatesObserved: 0,
+    buckets: { p50: 2, p75: 5, p90: 12, p95: 25, p99: 75 },
+  };
+}
+
+async function getPercentile(violationCount: number): Promise<number> {
+  const key = `percentiles:nyc`;
+  const buckets = (await cacheGet<PercentileBuckets>(key)) || defaultBuckets();
+  const { p50, p75, p90, p95, p99 } = buckets.buckets;
+  // returns top X%: lower number = worse driver
+  if (violationCount >= p99) return 1;
+  if (violationCount >= p95) return 5;
+  if (violationCount >= p90) return 10;
+  if (violationCount >= p75) return 25;
+  if (violationCount >= p50) return 50;
+  return 75;
+}
+
+export async function computeAndCachePercentiles(
+  leaderboard: LeaderboardEntry[],
+): Promise<PercentileBuckets> {
+  // Use leaderboard distribution as proxy. For a robust implementation we'd
+  // sample additional plates, but the top-500 distribution gives reasonable cutpoints.
+  const counts = leaderboard.map((e) => e.violationCount).sort((a, b) => a - b);
+  function pct(p: number): number {
+    if (!counts.length) return 0;
+    const idx = Math.min(counts.length - 1, Math.floor((p / 100) * counts.length));
+    return counts[idx]!;
+  }
+  const buckets: PercentileBuckets = {
+    city: "nyc",
+    computedAt: new Date().toISOString(),
+    totalPlatesObserved: counts.length,
+    buckets: {
+      p50: Math.max(2, pct(50)),
+      p75: Math.max(3, pct(75)),
+      p90: Math.max(5, pct(90)),
+      p95: Math.max(10, pct(95)),
+      p99: Math.max(25, pct(99)),
+    },
+  };
+  await cacheSet(`percentiles:nyc`, buckets, TTL.PERCENTILES);
+  return buckets;
+}
+
+export async function refreshNycLeaderboard(): Promise<{
+  leaderboardCount: number;
+  buckets: PercentileBuckets;
+}> {
+  const fresh = await fetchLeaderboardFresh(500);
+  await cacheSet(`leaderboard:nyc`, fresh, TTL.LEADERBOARD);
+  const buckets = await computeAndCachePercentiles(fresh);
+  return { leaderboardCount: fresh.length, buckets };
+}
+
+export const nycAdapter: CityAdapter = {
+  id: "nyc",
+  name: "New York City",
+  shortName: "NYC",
+  enabled: true,
+  supportedStates: [
+    "NY", "NJ", "CT", "PA", "MA", "FL", "TX", "CA", "VA", "MD", "DE", "RI",
+    "VT", "NH", "ME", "OH", "IL", "GA", "NC", "SC", "DC",
+  ],
+  cityPortalUrl: NYC_PORTAL,
+  lookup,
+  getLeaderboard,
+  getPercentile,
+};
