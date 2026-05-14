@@ -245,40 +245,34 @@ async function lookup(plate: string, state: string): Promise<PlateLookupResult> 
 type RecentRow = { plate?: string; state?: string; fine_amount?: string };
 
 async function fetchLeaderboardFresh(limit: number): Promise<LeaderboardEntry[]> {
-  // SODA can't GROUP BY across the whole table within a 60s function budget.
-  // Instead: pull the most recent N violations, aggregate by plate in memory.
-  // Trade-off — leaderboard reflects recent ticket activity (last ~weeks of NYC
-  // enforcement), not all-time totals. This is also more newsworthy: it ranks
-  // who's actively driving badly, not who racked up tickets a decade ago.
-  const PAGE_SIZE = 10_000;
-  const MAX_PAGES = 4; // ~40k most-recent violations
+  // SODA can't GROUP BY across the whole table within a 60s function budget,
+  // and $order=issue_date with $offset pagination forces a full sort that's
+  // also too slow. Instead we pull a single large slice using SODA's always-
+  // indexed system row id (`:id DESC`) — that gives us the most-recently-
+  // inserted rows essentially for free, no sort required.
   type Bucket = { plate: string; state: string; count: number; fines: number };
   const buckets = new Map<string, Bucket>();
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const rows = await sodaFetch<RecentRow[]>({
-      searchParams: {
-        $select: "plate,state,fine_amount",
-        $limit: String(PAGE_SIZE),
-        $offset: String(page * PAGE_SIZE),
-        $order: "issue_date DESC",
-      },
-      timeoutMs: 25_000,
-    });
-    if (!rows.length) break;
-    for (const r of rows) {
-      if (!r.plate || !r.state) continue;
-      const key = `${r.state}|${r.plate}`;
-      const fine = Number(r.fine_amount) || 0;
-      const existing = buckets.get(key);
-      if (existing) {
-        existing.count += 1;
-        existing.fines += fine;
-      } else {
-        buckets.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
-      }
+  const rows = await sodaFetch<RecentRow[]>({
+    searchParams: {
+      $select: "plate,state,fine_amount",
+      $limit: "50000",
+      $order: ":id DESC",
+    },
+    timeoutMs: 45_000,
+  });
+
+  for (const r of rows) {
+    if (!r.plate || !r.state) continue;
+    const key = `${r.state}|${r.plate}`;
+    const fine = Number(r.fine_amount) || 0;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.fines += fine;
+    } else {
+      buckets.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
     }
-    if (rows.length < PAGE_SIZE) break;
   }
 
   const sorted = [...buckets.values()].sort((a, b) => b.count - a.count);
