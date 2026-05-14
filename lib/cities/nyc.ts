@@ -212,12 +212,14 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
 
   let paid = 0;
   let unpaid = 0;
+  let dismissed = 0;
   let totalIssued = 0;
   let totalPaid = 0;
   let totalDue = 0;
   for (const v of violations) {
     if (v.status === "paid") paid += 1;
     else if (v.status === "unpaid") unpaid += 1;
+    else if (v.status === "dismissed") dismissed += 1;
     totalIssued += v.fineAmount;
     totalPaid += v.amountPaid;
     totalDue += v.amountDue;
@@ -230,6 +232,7 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
     totalViolations: violations.length,
     totalPaid: paid,
     totalUnpaid: unpaid,
+    totalDismissed: dismissed,
     totalFinesIssued: Math.round(totalIssued * 100) / 100,
     totalFinesPaid: Math.round(totalPaid * 100) / 100,
     totalFinesOutstanding: Math.round(totalDue * 100) / 100,
@@ -242,7 +245,7 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
 
 // Bump this when the shape/semantics of PlateLookupResult change so old
 // cache entries are skipped on the next request instead of serving stale data.
-const LOOKUP_CACHE_VERSION = 2;
+const LOOKUP_CACHE_VERSION = 3;
 
 async function lookup(plate: string, state: string): Promise<PlateLookupResult> {
   const normPlate = normalizePlate(plate);

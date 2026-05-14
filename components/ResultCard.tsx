@@ -29,9 +29,10 @@ export function ResultCard({ result, topPercent, cityShortName }: ResultCardProp
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="paid" value={formatNumber(result.totalPaid)} />
         <Stat label="unpaid" value={formatNumber(result.totalUnpaid)} />
+        <Stat label="dismissed" value={formatNumber(result.totalDismissed)} />
         <Stat label="total fines" value={formatCurrency(result.totalFinesIssued, { compact: true })} />
         <Stat
           label="outstanding"

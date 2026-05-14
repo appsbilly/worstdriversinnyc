@@ -21,6 +21,7 @@ export interface PlateLookupResult {
   totalViolations: number;
   totalPaid: number;
   totalUnpaid: number;
+  totalDismissed: number;
   totalFinesIssued: number;
   totalFinesPaid: number;
   totalFinesOutstanding: number;
