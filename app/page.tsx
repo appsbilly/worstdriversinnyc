@@ -1,9 +1,28 @@
 import { PlateSearch } from "@/components/PlateSearch";
 import { Leaderboard } from "@/components/Leaderboard";
+import { WindowTabs } from "@/components/WindowTabs";
 import { nycAdapter } from "@/lib/cities/nyc";
+import { LeaderboardWindow } from "@/lib/cities/types";
 import Link from "next/link";
 
-export const revalidate = 1800;
+const WINDOWS: LeaderboardWindow[] = ["1w", "1m", "1y", "all"];
+const WINDOW_LABELS: Record<LeaderboardWindow, string> = {
+  "1w": "1 week",
+  "1m": "1 month",
+  "1y": "1 year",
+  "all": "all time",
+};
+const WINDOW_HEADLINES: Record<LeaderboardWindow, string> = {
+  "1w": "worst drivers · last 7 days",
+  "1m": "worst drivers · last 30 days",
+  "1y": "worst drivers · last year",
+  "all": "worst drivers · all time",
+};
+
+function parseWindow(input: string | undefined): LeaderboardWindow {
+  if (input && (WINDOWS as string[]).includes(input)) return input as LeaderboardWindow;
+  return "1m";
+}
 
 function fmtIso(iso: string): string {
   if (!iso) return "";
@@ -12,17 +31,23 @@ function fmtIso(iso: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(d);
 }
 
-export default async function HomePage() {
+interface PageProps {
+  searchParams: { window?: string };
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const window = parseWindow(searchParams.window);
+
   let top: Awaited<ReturnType<typeof nycAdapter.getLeaderboard>> = [];
   let meta: Awaited<ReturnType<NonNullable<typeof nycAdapter.getLeaderboardMeta>>> | null = null;
   try {
-    top = await nycAdapter.getLeaderboard(10, "1m");
+    top = await nycAdapter.getLeaderboard(10, window);
   } catch {
     top = [];
   }
   if (nycAdapter.getLeaderboardMeta) {
     try {
-      meta = await nycAdapter.getLeaderboardMeta("1m");
+      meta = await nycAdapter.getLeaderboardMeta(window);
     } catch {
       meta = null;
     }
@@ -52,22 +77,34 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mt-16 md:mt-24">
-        <div className="mb-4 flex items-end justify-between">
+      <section id="leaderboard" className="mt-16 scroll-mt-16 md:mt-24">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="font-serif text-3xl font-bold tracking-tight md:text-4xl">
-              worst drivers · last 30 days
+              {WINDOW_HEADLINES[window]}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {range ? <>tickets issued <span className="text-foreground">{range}</span></> : "refreshed daily from nyc open data"}
+              {range ? (
+                <>tickets issued <span className="text-foreground">{range}</span></>
+              ) : (
+                "refreshed daily from nyc open data"
+              )}
             </p>
           </div>
           <Link
-            href="/leaderboard/nyc"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            href={`/leaderboard/nyc?window=${window}`}
+            className="text-sm text-muted-foreground hover:text-foreground self-start md:self-auto"
           >
             full leaderboard →
           </Link>
+        </div>
+        <div className="mb-4">
+          <WindowTabs
+            basePath="/"
+            windows={WINDOWS.map((w) => ({ value: w, label: WINDOW_LABELS[w] }))}
+            active={window}
+            hash="leaderboard"
+          />
         </div>
         <Leaderboard entries={top} city="nyc" compact />
       </section>
@@ -81,7 +118,7 @@ export default async function HomePage() {
         <FeatureCard
           title="view full leaderboard"
           body="top 100 worst drivers in the city, refreshed every 24 hours."
-          href="/leaderboard/nyc"
+          href={`/leaderboard/nyc?window=${window}`}
         />
         <FeatureCard
           title="how this works"

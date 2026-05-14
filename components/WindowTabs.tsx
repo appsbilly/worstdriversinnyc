@@ -5,9 +5,11 @@ interface WindowTabsProps {
   basePath: string;
   windows: { value: string; label: string }[];
   active: string;
+  /** Optional anchor appended to each tab link so the page scrolls back to a known section on nav. */
+  hash?: string;
 }
 
-export function WindowTabs({ basePath, windows, active }: WindowTabsProps) {
+export function WindowTabs({ basePath, windows, active, hash }: WindowTabsProps) {
   return (
     <div
       className="inline-flex rounded-md border border-border bg-background p-1"
@@ -15,10 +17,11 @@ export function WindowTabs({ basePath, windows, active }: WindowTabsProps) {
     >
       {windows.map((w) => {
         const isActive = w.value === active;
+        const href = `${basePath}?window=${w.value}${hash ? `#${hash}` : ""}`;
         return (
           <Link
             key={w.value}
-            href={`${basePath}?window=${w.value}`}
+            href={href}
             role="tab"
             aria-selected={isActive}
             className={cn(
