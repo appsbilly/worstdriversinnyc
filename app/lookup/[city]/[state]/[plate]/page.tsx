@@ -7,6 +7,7 @@ import {
   CityNotYetSupportedError,
   InvalidPlateError,
   PlateLookupResult,
+  RankInfo,
   UpstreamApiError,
 } from "@/lib/cities/types";
 import { formatCurrency, formatNumber, isValidPlate, normalizePlate, normalizeState } from "@/lib/format";
@@ -58,12 +59,14 @@ export default async function LookupPage({ params }: PageProps) {
   }
 
   let result: PlateLookupResult | null = null;
-  let topPercent = 50;
+  let rank: RankInfo | null = null;
   let err: string | null = null;
 
   try {
     result = await city.lookup(plate, state);
-    topPercent = await city.getPercentile(result.totalViolations);
+    if (city.getRank) {
+      rank = await city.getRank(result.totalViolations);
+    }
   } catch (e) {
     if (e instanceof CityNotYetSupportedError) {
       return <ComingSoonState city={city} />;
@@ -92,6 +95,10 @@ export default async function LookupPage({ params }: PageProps) {
 
   const siteUrl = getSiteUrl();
   const shareUrl = `${siteUrl}/lookup/${city.id}/${state}/${plate}`;
+  const rankPhrase =
+    rank && rank.total > 0
+      ? `ranked #${formatNumber(rank.rank)} of ${formatNumber(rank.total)} worst ${city.shortName.toLowerCase()} drivers.`
+      : "";
   const shareText =
     result.totalViolations === 0
       ? `my ${city.shortName.toLowerCase()} plate has zero tickets. boring. look yours up →`
@@ -99,7 +106,7 @@ export default async function LookupPage({ params }: PageProps) {
           result.totalViolations,
         )} tickets and ${formatCurrency(result.totalFinesIssued, {
           compact: true,
-        })} in fines. top ${topPercent}% of the city's worst drivers. look yours up →`;
+        })} in fines.${rankPhrase ? ` ${rankPhrase}` : ""} look yours up →`;
 
   return (
     <div className="container py-10 md:py-12 max-w-5xl">
@@ -108,7 +115,7 @@ export default async function LookupPage({ params }: PageProps) {
       </Link>
 
       <div className="mt-4">
-        <ResultCard result={result} topPercent={topPercent} cityShortName={city.shortName.toLowerCase()} />
+        <ResultCard result={result} rank={rank} cityShortName={city.shortName.toLowerCase()} />
       </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

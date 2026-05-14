@@ -19,7 +19,8 @@ export async function GET(_req: Request, { params }: Ctx) {
   let totalViolations = 0;
   let totalFines = 0;
   let totalOutstanding = 0;
-  let topPercent = 50;
+  let rankNum: number | null = null;
+  let rankTotal: number | null = null;
   let supported = !!city?.enabled;
 
   if (city?.enabled && plate && state.length === 2) {
@@ -28,23 +29,33 @@ export async function GET(_req: Request, { params }: Ctx) {
       totalViolations = result.totalViolations;
       totalFines = result.totalFinesIssued;
       totalOutstanding = result.totalFinesOutstanding;
-      topPercent = await city.getPercentile(result.totalViolations);
+      if (city.getRank) {
+        const r = await city.getRank(result.totalViolations);
+        if (r) {
+          rankNum = r.rank;
+          rankTotal = r.total;
+        }
+      }
     } catch {
       supported = false;
     }
   }
 
   const cityName = city?.shortName?.toLowerCase() ?? "nyc";
-  const heroLabel = supported
-    ? totalViolations === 0
+  const heroLabel = !supported
+    ? "coming soon"
+    : totalViolations === 0
       ? "clean record"
-      : `top ${topPercent}%`
-    : "coming soon";
-  const subLabel = supported
-    ? totalViolations === 0
+      : rankNum !== null
+        ? `#${formatNumber(rankNum)}`
+        : "—";
+  const subLabel = !supported
+    ? `${cityName} lookups land soon`
+    : totalViolations === 0
       ? "boring."
-      : `of ${cityName} drivers`
-    : `${cityName} lookups land soon`;
+      : rankTotal !== null
+        ? `of ${formatNumber(rankTotal)} ${cityName} drivers`
+        : "rank refreshing";
 
   const accent = "#FF6B35";
 

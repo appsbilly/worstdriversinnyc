@@ -50,8 +50,8 @@ export async function GET(req: Request) {
 
   try {
     const result = await city.lookup(plate, state);
-    const topPercent = await city.getPercentile(result.totalViolations);
-    return NextResponse.json({ result, topPercent });
+    const rank = city.getRank ? await city.getRank(result.totalViolations) : null;
+    return NextResponse.json({ result, rank });
   } catch (err) {
     if (err instanceof CityNotYetSupportedError) {
       return NextResponse.json(

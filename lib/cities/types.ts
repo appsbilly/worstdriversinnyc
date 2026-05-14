@@ -58,6 +58,14 @@ export interface PercentileBuckets {
 
 export type LeaderboardWindow = "1w" | "1m" | "1y" | "all";
 
+export interface RankInfo {
+  /** 1 = worst. Plates tied at the same violation count share a rank;
+   *  the next distinct count skips by the tie-group size (standard competition ranking). */
+  rank: number;
+  /** Total number of plates observed in the all-time distribution. */
+  total: number;
+}
+
 export interface CityAdapter {
   id: string;
   name: string;
@@ -69,6 +77,7 @@ export interface CityAdapter {
   getLeaderboard(limit: number, window?: LeaderboardWindow): Promise<LeaderboardEntry[]>;
   getLeaderboardMeta?(window: LeaderboardWindow): Promise<LeaderboardMeta | null>;
   getPercentile(violationCount: number): Promise<number>;
+  getRank?(violationCount: number): Promise<RankInfo | null>;
 }
 
 export class CityNotYetSupportedError extends Error {

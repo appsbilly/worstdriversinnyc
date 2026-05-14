@@ -1,15 +1,15 @@
-import { PlateLookupResult } from "@/lib/cities/types";
+import { PlateLookupResult, RankInfo } from "@/lib/cities/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { PlateFrame } from "./PlateFrame";
 import { RankBadge } from "./RankBadge";
 
 interface ResultCardProps {
   result: PlateLookupResult;
-  topPercent: number;
+  rank: RankInfo | null;
   cityShortName: string;
 }
 
-export function ResultCard({ result, topPercent, cityShortName }: ResultCardProps) {
+export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
   return (
     <section className="rounded-2xl border border-border bg-muted/40 p-6 md:p-10">
       <div className="flex flex-col items-start gap-8 md:flex-row md:items-center md:justify-between">
@@ -23,7 +23,8 @@ export function ResultCard({ result, topPercent, cityShortName }: ResultCardProp
           </div>
         </div>
         <RankBadge
-          topPercent={topPercent}
+          rank={rank?.rank ?? null}
+          total={rank?.total ?? null}
           city={cityShortName}
           totalViolations={result.totalViolations}
         />

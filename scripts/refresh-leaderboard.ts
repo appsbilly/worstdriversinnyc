@@ -169,6 +169,17 @@ async function writeWindows(
     },
   };
   await redis.set("percentiles:nyc", percentiles, { ex: ttlSeconds });
+
+  // Rank histogram — count of plates at each violation-count value, across the
+  // full (all-time) distribution. Lets us compute competition-style rank:
+  //   rank(c) = 1 + sum of plates with count > c
+  // Ties get the same rank, next distinct count skips by the tie-group size.
+  const histogram: Record<string, number> = {};
+  for (const c of allCounts) {
+    const k = String(c);
+    histogram[k] = (histogram[k] || 0) + 1;
+  }
+  await redis.set("rank_histogram:nyc", histogram, { ex: ttlSeconds });
 }
 
 async function main() {

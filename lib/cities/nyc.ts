@@ -8,6 +8,7 @@ import {
   LeaderboardWindow,
   PercentileBuckets,
   PlateLookupResult,
+  RankInfo,
   UpstreamApiError,
   Violation,
 } from "./types";
@@ -331,6 +332,22 @@ function defaultBuckets(): PercentileBuckets {
   };
 }
 
+async function getRank(violationCount: number): Promise<RankInfo | null> {
+  if (violationCount <= 0) return null;
+  const hist = await cacheGet<Record<string, number>>(`rank_histogram:nyc`);
+  if (!hist) return null;
+  let rank = 1;
+  let total = 0;
+  for (const [k, n] of Object.entries(hist)) {
+    const count = Number(k);
+    const plates = Number(n) || 0;
+    total += plates;
+    if (count > violationCount) rank += plates;
+  }
+  if (total === 0) return null;
+  return { rank, total };
+}
+
 async function getPercentile(violationCount: number): Promise<number> {
   const key = `percentiles:nyc`;
   const buckets = (await cacheGet<PercentileBuckets>(key)) || defaultBuckets();
@@ -395,4 +412,5 @@ export const nycAdapter: CityAdapter = {
   getLeaderboard,
   getLeaderboardMeta,
   getPercentile,
+  getRank,
 };
