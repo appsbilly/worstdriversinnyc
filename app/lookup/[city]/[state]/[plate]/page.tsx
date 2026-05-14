@@ -10,7 +10,7 @@ import {
   RankInfo,
   UpstreamApiError,
 } from "@/lib/cities/types";
-import { formatCurrency, formatNumber, isValidPlate, normalizePlate, normalizeState } from "@/lib/format";
+import { formatCurrency, formatNumber, isValidPlate, normalizePlate, normalizeState, ordinalRank } from "@/lib/format";
 import { getSiteUrl } from "@/lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -95,18 +95,16 @@ export default async function LookupPage({ params }: PageProps) {
 
   const siteUrl = getSiteUrl();
   const shareUrl = `${siteUrl}/lookup/${city.id}/${state}/${plate}`;
-  const rankPhrase =
-    rank && rank.total > 0
-      ? `ranked #${formatNumber(rank.rank)} of ${formatNumber(rank.total)} worst ${city.shortName.toLowerCase()} drivers.`
-      : "";
-  const shareText =
-    result.totalViolations === 0
-      ? `my ${city.shortName.toLowerCase()} plate has zero tickets. boring. look yours up →`
-      : `my ${city.shortName.toLowerCase()} plate has ${formatNumber(
-          result.totalViolations,
-        )} tickets and ${formatCurrency(result.totalFinesIssued, {
-          compact: true,
-        })} in fines.${rankPhrase ? ` ${rankPhrase}` : ""} look yours up →`;
+  const cityShort = city.shortName.toLowerCase();
+  const finesStr = formatCurrency(result.totalFinesIssued, { compact: true });
+  let shareText: string;
+  if (result.totalViolations === 0) {
+    shareText = `i have a clean driving record in ${cityShort}. boring.`;
+  } else if (rank && rank.total > 0) {
+    shareText = `i am the ${ordinalRank(rank.rank)} worst driver in ${cityShort} with ${finesStr} in fines.`;
+  } else {
+    shareText = `i have ${formatNumber(result.totalViolations)} tickets and ${finesStr} in fines in ${cityShort}.`;
+  }
 
   return (
     <div className="container py-10 md:py-12 max-w-5xl">
