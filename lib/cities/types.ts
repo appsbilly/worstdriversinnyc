@@ -1,4 +1,4 @@
-export type ViolationStatus = "paid" | "unpaid" | "in_dispute" | "unknown";
+export type ViolationStatus = "paid" | "unpaid" | "in_dispute" | "dismissed" | "unknown";
 
 export interface Violation {
   id: string;

@@ -45,13 +45,18 @@ function n(v: string | undefined): number {
 function deriveStatus(row: SodaRow): Violation["status"] {
   const due = n(row.amount_due);
   const paid = n(row.payment_amount);
+  const fine = n(row.fine_amount);
+  const reduction = n(row.reduction_amount);
   if (row.violation_status && /dispute|hearing pending/i.test(row.violation_status)) {
     return "in_dispute";
   }
-  if (due === 0 && paid > 0) return "paid";
   if (due > 0) return "unpaid";
-  if (due === 0 && paid === 0 && n(row.fine_amount) === 0) return "unknown";
-  if (due === 0) return "paid";
+  if (paid > 0) return "paid";
+  // due=0, paid=0 — the ticket isn't outstanding but nothing was paid either.
+  // If a reduction was applied, the ticket was forgiven (common with first-time
+  // offenders or successful disputes). If everything is zero, the record is
+  // ambiguous (could be a voided ticket or incomplete data).
+  if (reduction > 0 || fine > 0) return "dismissed";
   return "unknown";
 }
 
@@ -67,7 +72,10 @@ function toIsoDate(input: string | undefined): string {
 }
 
 function toViolation(row: SodaRow): Violation {
-  const fineAmount = n(row.fine_amount) + n(row.penalty_amount) + n(row.interest_amount) - n(row.reduction_amount);
+  // Show the gross face value of the ticket (what the violator was charged),
+  // not the post-reduction net. A reduced/dismissed ticket still had an original
+  // fine; subtracting the reduction hides that and produces misleading "$0" displays.
+  const fineAmount = n(row.fine_amount) + n(row.penalty_amount) + n(row.interest_amount);
   const amountPaid = n(row.payment_amount);
   const amountDue = n(row.amount_due);
   const locationParts = [row.precinct, row.county].filter(Boolean);
@@ -232,11 +240,15 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
   };
 }
 
+// Bump this when the shape/semantics of PlateLookupResult change so old
+// cache entries are skipped on the next request instead of serving stale data.
+const LOOKUP_CACHE_VERSION = 2;
+
 async function lookup(plate: string, state: string): Promise<PlateLookupResult> {
   const normPlate = normalizePlate(plate);
   const normState = normalizeState(state);
   if (!normPlate) throw new InvalidPlateError();
-  const key = `lookup:nyc:${normState}:${normPlate}`;
+  const key = `lookup:nyc:v${LOOKUP_CACHE_VERSION}:${normState}:${normPlate}`;
   const cached = await cacheGet<PlateLookupResult>(key);
   if (cached) return cached;
   const fresh = await fetchLookupFresh(normPlate, normState);

@@ -132,6 +132,7 @@ function StatusPill({ status }: { status: Violation["status"] }) {
     paid: { label: "paid", cls: "bg-ok/10 text-ok" },
     unpaid: { label: "unpaid", cls: "bg-danger/10 text-danger" },
     in_dispute: { label: "dispute", cls: "bg-warn/10 text-warn" },
+    dismissed: { label: "dismissed", cls: "bg-muted text-muted-foreground" },
     unknown: { label: "—", cls: "bg-muted text-muted-foreground" },
   };
   const { label, cls } = map[status];
