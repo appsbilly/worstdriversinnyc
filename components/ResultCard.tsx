@@ -115,13 +115,13 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
 
       {/* outstanding (only when relevant) */}
       {result.totalFinesOutstanding > 0 ? (
-        <div className="mt-4 flex items-baseline justify-between rounded-md border border-danger/30 bg-danger/5 px-4 py-3 text-left">
-          <span className="text-[11px] uppercase tracking-[0.22em] text-danger/80">
-            outstanding balance
-          </span>
-          <span className="font-display text-2xl font-black text-danger tabular">
+        <div className="mt-4 rounded-md border border-danger/30 bg-danger/5 px-4 py-4 text-center">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-danger/80">
+            still owes the city
+          </p>
+          <p className="mt-1 font-display text-4xl font-black text-danger tabular leading-none md:text-5xl">
             {formatCurrency(result.totalFinesOutstanding)}
-          </span>
+          </p>
         </div>
       ) : null}
     </section>
