@@ -1,7 +1,7 @@
 import { PlateLookupResult, RankInfo } from "@/lib/cities/types";
 import { formatCurrency, formatDate, formatNumber, ordinalRank } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { PlateFrame } from "./PlateFrame";
+import { PlateReveal } from "./PlateReveal";
 
 interface ResultCardProps {
   result: PlateLookupResult;
@@ -26,24 +26,26 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
     : "text-foreground";
 
   return (
-    <section className="rounded-2xl border border-border bg-muted/40 p-5 md:p-10">
-      {/* top: plate frame + small date metadata strip */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <PlateFrame plate={result.plate} state={result.state} />
-        {result.firstViolationDate ? (
-          <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground md:text-right">
-            <span className="opacity-60">on file</span>{" "}
-            <span className="text-foreground tracking-normal normal-case">
-              {formatDate(result.firstViolationDate)}
-              {result.lastViolationDate && result.lastViolationDate !== result.firstViolationDate
-                ? ` – ${formatDate(result.lastViolationDate)}`
-                : ""}
-            </span>
-          </div>
-        ) : null}
+    <section className="rounded-2xl border border-border bg-muted/40 p-5 md:p-10 text-center">
+      {/* plate, centered, with hide-plate toggle for shareable screenshots */}
+      <div className="flex justify-center">
+        <PlateReveal plate={result.plate} state={result.state} />
       </div>
 
-      {/* hero: rank as the story (or clean state) */}
+      {/* date range as small eyebrow */}
+      {result.firstViolationDate ? (
+        <p className="mt-4 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+          <span className="opacity-60">on file</span>{" "}
+          <span className="text-foreground tracking-normal normal-case">
+            {formatDate(result.firstViolationDate)}
+            {result.lastViolationDate && result.lastViolationDate !== result.firstViolationDate
+              ? ` – ${formatDate(result.lastViolationDate)}`
+              : ""}
+          </span>
+        </p>
+      ) : null}
+
+      {/* hero: the rank statement */}
       <div className="mt-8 md:mt-10">
         {clean ? (
           <>
@@ -100,7 +102,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
       </div>
 
       {/* stats grid */}
-      <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-6 md:mt-10 md:grid-cols-5 md:pt-8">
+      <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-6 text-left md:mt-10 md:grid-cols-5 md:pt-8">
         <Stat label="violations" value={formatNumber(result.totalViolations)} />
         <Stat label="paid" value={formatNumber(result.totalPaid)} />
         <Stat label="unpaid" value={formatNumber(result.totalUnpaid)} accent={result.totalUnpaid > 0 ? "danger" : undefined} />
@@ -113,7 +115,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
 
       {/* outstanding (only when relevant) */}
       {result.totalFinesOutstanding > 0 ? (
-        <div className="mt-4 flex items-baseline justify-between rounded-md border border-danger/30 bg-danger/5 px-4 py-3">
+        <div className="mt-4 flex items-baseline justify-between rounded-md border border-danger/30 bg-danger/5 px-4 py-3 text-left">
           <span className="text-[11px] uppercase tracking-[0.22em] text-danger/80">
             outstanding balance
           </span>
