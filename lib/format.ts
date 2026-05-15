@@ -57,5 +57,6 @@ export function anonymizePlate(plate: string): string {
 export function ordinalRank(rank: number): string {
   const s = ["th", "st", "nd", "rd"];
   const v = rank % 100;
-  return rank + (s[(v - 20) % 10] || s[v] || s[0]);
+  const suffix = s[(v - 20) % 10] || s[v] || s[0];
+  return `${formatNumber(rank)}${suffix}`;
 }
