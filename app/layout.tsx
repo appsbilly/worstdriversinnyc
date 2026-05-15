@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/utils";
-import { Fraunces, Instrument_Sans, JetBrains_Mono, Archivo_Black } from "next/font/google";
+import { Fraunces, Instrument_Sans, JetBrains_Mono, Inter } from "next/font/google";
 
 const serif = Fraunces({
   subsets: ["latin"],
@@ -23,11 +23,11 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
-// Heavy geometric sans for big shareable numerals — much more legible than
-// Fraunces at huge sizes, where its decorative 4s and 2s get illegible.
-const display = Archivo_Black({
+// Clean, highly legible sans for big shareable numerals. Reads cleanly at any
+// size and as a thumbnail — top priority is readability.
+const display = Inter({
   subsets: ["latin"],
-  weight: ["400"],
+  weight: ["700", "800", "900"],
   variable: "--font-display",
   display: "swap",
 });

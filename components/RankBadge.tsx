@@ -20,7 +20,7 @@ export function RankBadge({ rank, total, city, totalViolations, className }: Ran
           className,
         )}
       >
-        <span className="font-display text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">
+        <span className="font-display font-black text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">
           no record
         </span>
         <span className="mt-1 text-xs uppercase tracking-widest opacity-80">
@@ -38,7 +38,7 @@ export function RankBadge({ rank, total, city, totalViolations, className }: Ran
           className,
         )}
       >
-        <span className="font-display text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">—</span>
+        <span className="font-display font-black text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">—</span>
         <span className="mt-1 text-xs uppercase tracking-widest">rank pending refresh</span>
       </div>
     );
@@ -65,7 +65,7 @@ export function RankBadge({ rank, total, city, totalViolations, className }: Ran
       )}
     >
       <span className="text-xs uppercase tracking-widest opacity-80">rank</span>
-      <span className="font-display text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">
+      <span className="font-display font-black text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">
         #{formatNumber(rank)}
       </span>
       <span className="mt-1 text-xs uppercase tracking-widest opacity-80">
