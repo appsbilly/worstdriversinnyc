@@ -18,63 +18,80 @@ export function Leaderboard({ entries, city, compact = false }: LeaderboardProps
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-xl border border-border p-6 text-sm text-muted-foreground">
-        leaderboard not yet computed. check back after the next cron run.
+      <div className="border-t-2 border-b border-foreground/85 px-1 py-12 text-center">
+        <p className="font-serif text-2xl italic text-muted-foreground">
+          the presses are still warming up.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          leaderboard hasn't been computed yet. check back after the next refresh.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="text-xs uppercase tracking-widest text-muted-foreground">
-          top {rows.length} drivers · {city}
-        </span>
+    <div className="border-t-2 border-b border-foreground/85">
+      <div className="flex items-center justify-between border-b border-foreground/15 px-1 py-2">
+        <span className="eyebrow">{rows.length} drivers · {city}</span>
         <button
           type="button"
           onClick={() => setReveal((r) => !r)}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
         >
-          {reveal ? "anonymize plates" : "reveal plates"}
+          {reveal ? "anonymize" : "reveal plates"}
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 font-medium">#</th>
-              <th className="px-4 py-2 font-medium">plate</th>
-              <th className="px-4 py-2 font-medium">state</th>
-              <th className="px-4 py-2 text-right font-medium">tickets</th>
-              <th className="px-4 py-2 text-right font-medium">fines</th>
+        <table className="w-full min-w-[560px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground border-b border-foreground/15">
+              <th className="px-1 py-2 text-left font-medium w-12">rank</th>
+              <th className="px-1 py-2 text-left font-medium">plate</th>
+              <th className="px-1 py-2 text-left font-medium w-16">state</th>
+              <th className="px-1 py-2 text-right font-medium">tickets</th>
+              <th className="px-1 py-2 text-right font-medium">fines</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((e) => (
-              <tr key={`${e.state}-${e.plate}`} className="border-t border-border">
-                <td className="px-4 py-2 tabular-nums text-muted-foreground">{e.rank}</td>
-                <td className="px-4 py-2 font-mono font-bold tracking-wider">
+            {rows.map((e, idx) => (
+              <tr
+                key={`${e.state}-${e.plate}`}
+                className="border-b border-foreground/10 last:border-b-0 hover:bg-foreground/[0.03] transition-colors"
+              >
+                <td className="px-1 py-3 text-left">
+                  <span
+                    className={cn(
+                      "font-serif font-black text-2xl tabular leading-none",
+                      idx === 0 && "text-accent",
+                    )}
+                  >
+                    {e.rank}
+                  </span>
+                </td>
+                <td className="px-1 py-3 font-mono font-bold tracking-[0.08em] text-base">
                   {reveal ? (
                     <Link
                       href={`/lookup/${city}/${e.state}/${e.plate}`}
-                      className="hover:underline"
+                      className="hover:text-accent transition-colors"
                     >
                       {e.plate}
                     </Link>
                   ) : (
-                    anonymizePlate(e.plate)
+                    <span className="text-muted-foreground">{anonymizePlate(e.plate)}</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">{e.state}</td>
+                <td className="px-1 py-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {e.state}
+                </td>
                 <td
                   className={cn(
-                    "px-4 py-2 text-right tabular-nums font-semibold",
-                    e.violationCount > 100 && "text-danger",
+                    "px-1 py-3 text-right font-serif font-bold text-xl tabular",
+                    e.violationCount > 80 && "text-accent",
                   )}
                 >
                   {formatNumber(e.violationCount)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                <td className="px-1 py-3 text-right font-mono text-sm text-muted-foreground tabular">
                   {formatCurrency(e.totalFines, { compact: true })}
                 </td>
               </tr>

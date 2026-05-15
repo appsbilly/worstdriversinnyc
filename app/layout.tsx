@@ -2,18 +2,24 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/utils";
-import { Inter, Source_Serif_4 } from "next/font/google";
+import { Fraunces, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 
-const sans = Inter({
+const serif = Fraunces({
+  subsets: ["latin"],
+  axes: ["opsz", "SOFT"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const sans = Instrument_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
 });
 
-const serif = Source_Serif_4({
+const mono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  variable: "--font-serif",
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -52,7 +58,7 @@ export default function RootLayout({
 }) {
   const plausibleDomain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
       <head>
         {plausibleDomain ? (
           <script
@@ -81,19 +87,21 @@ function SiteHeader() {
     .format(new Date())
     .toLowerCase();
   return (
-    <header className="border-b border-foreground/15">
+    <header className="border-b-2 border-foreground/85">
       <div className="container">
-        <div className="flex items-end justify-between pt-6 pb-3">
-          <div className="hidden md:block text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-            vol. i · {today}
+        <div className="relative grid grid-cols-3 items-end py-4 md:py-5">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+            <span className="hidden md:inline">vol. i, no. 1 · </span>
+            <span>{today}</span>
           </div>
           <Link
             href="/"
-            className="font-serif text-3xl font-black tracking-tight leading-none md:absolute md:left-1/2 md:-translate-x-1/2"
+            className="font-serif text-[26px] font-black tracking-[-0.04em] leading-none text-center md:text-[40px]"
+            style={{ fontStretch: "100%" }}
           >
-            worstdriversinnyc
+            worstdrivers<span className="italic">inNYC</span>
           </Link>
-          <nav className="flex items-center gap-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <nav className="flex items-center justify-end gap-4 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             <Link href="/leaderboard/nyc" className="hover:text-foreground">
               leaderboard
             </Link>
@@ -101,15 +109,16 @@ function SiteHeader() {
               href="/methodology"
               aria-label="methodology"
               title="methodology"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-foreground/25 text-xs font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-foreground/40 text-xs font-bold text-muted-foreground transition hover:bg-foreground hover:text-background hover:border-foreground"
             >
               ?
             </Link>
           </nav>
         </div>
-        <div className="hidden md:flex items-center justify-between border-t border-foreground/15 py-1 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+        <div className="hidden md:flex items-center justify-between border-t border-foreground/15 py-1.5 text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
           <span>a public records leaderboard · new york</span>
-          <span>data: nyc dept. of finance · refreshed daily</span>
+          <span className="italic normal-case tracking-normal text-muted-foreground/80">"the publication of record for the city's worst drivers"</span>
+          <span>data: nyc dof open records · daily</span>
         </div>
       </div>
     </header>

@@ -4,86 +4,93 @@
 
 @layer base {
   :root {
-    /* warm off-white newsprint */
-    --background: 38 24% 96%;
-    --foreground: 24 12% 10%;
+    /* warm cream paper */
+    --background: 38 30% 95%;
+    --paper-shadow: 24 14% 84%;
+    --foreground: 24 14% 8%;
 
-    --muted: 36 18% 92%;
-    --muted-foreground: 24 8% 38%;
+    --muted: 36 22% 90%;
+    --muted-foreground: 24 8% 36%;
 
-    --border: 24 10% 84%;
+    --border: 24 10% 80%;
+    --rule: 24 14% 18%;
 
-    /* editorial accent — a deep cinnabar, less candy-orange than before */
-    --accent: 12 78% 48%;
+    /* cinnabar — used sparingly for drama */
+    --accent: 8 78% 44%;
     --accent-foreground: 0 0% 100%;
 
-    --ok: 158 65% 32%;
-    --warn: 32 92% 44%;
-    --danger: 4 78% 44%;
+    --ok: 158 60% 28%;
+    --warn: 32 92% 40%;
+    --danger: 4 80% 42%;
 
-    --radius: 0.25rem;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: 24 8% 7%;
-      --foreground: 36 14% 94%;
-      --muted: 24 6% 14%;
-      --muted-foreground: 24 6% 62%;
-      --border: 24 6% 22%;
-      --accent: 12 78% 56%;
-      --accent-foreground: 0 0% 100%;
-      --ok: 158 65% 48%;
-      --warn: 32 92% 58%;
-      --danger: 4 78% 58%;
-    }
+    --radius: 0.125rem;
   }
 
   html {
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
-    font-feature-settings: "ss01", "cv11";
+    font-feature-settings: "ss01", "ss02";
+    /* paper grain — extremely subtle noise texture */
+    background-image:
+      radial-gradient(hsl(var(--paper-shadow) / 0.18) 1px, transparent 0),
+      url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size: 36px 36px, 200px 200px;
+    background-position: 0 0, 0 0;
   }
 
-  /* tabular numerals everywhere by default for stat-heavy UI */
-  .tabular-nums-default,
   table,
   th,
-  td {
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* old-style figures in body prose; lining figures elsewhere via tabular-nums */
-  .lining-nums {
-    font-variant-numeric: lining-nums tabular-nums;
+  td,
+  .tabular {
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   h1, h2, h3, h4 {
-    @apply font-serif tracking-tight;
-    font-feature-settings: "ss01", "ss02", "cv11";
+    @apply font-serif tracking-[-0.02em];
+    font-feature-settings: "ss01", "ss02", "ss03";
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.18);
+    color: hsl(var(--accent));
   }
 }
 
 @layer components {
   .eyebrow {
-    @apply text-[10px] uppercase tracking-[0.22em] text-muted-foreground;
+    @apply text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground;
   }
 
   .dek {
     @apply text-base text-muted-foreground md:text-lg;
+    font-style: italic;
   }
 
   .rule {
     @apply border-t border-foreground/15;
   }
 
+  .hairline {
+    @apply border-foreground/15;
+  }
+
+  .display {
+    @apply font-serif font-black leading-[0.9] tracking-[-0.03em];
+    font-feature-settings: "ss01", "ss02";
+  }
+
+  .display-italic {
+    @apply font-serif font-black italic leading-[0.9] tracking-[-0.03em];
+  }
+
   .plate-frame {
-    @apply relative inline-flex items-center justify-center rounded-md border-4 border-foreground/80 bg-white px-6 py-3 font-mono text-3xl font-black tracking-widest text-black shadow-sm;
-    background-image: linear-gradient(180deg, #fefefe 0%, #f1f1f1 100%);
+    @apply relative inline-flex items-center justify-center rounded-md border-4 border-foreground/85 bg-white px-6 py-3 font-mono text-3xl font-black tracking-widest text-black shadow-sm;
+    background-image: linear-gradient(180deg, #fefefe 0%, #ececec 100%);
   }
 
   .plate-frame--ny {
@@ -91,8 +98,10 @@
   }
 
   .stat-hero {
-    @apply font-serif font-black leading-[0.92] tracking-[-0.02em];
-    font-size: clamp(3.5rem, 12vw, 8rem);
+    @apply font-serif font-black leading-[0.85] tracking-[-0.035em];
+    font-size: clamp(4rem, 14vw, 11rem);
+    font-feature-settings: "lnum", "tnum", "ss01";
+    font-variant-numeric: lining-nums tabular-nums;
   }
 
   .stat-num {
@@ -100,7 +109,40 @@
     font-variant-numeric: lining-nums tabular-nums;
   }
 
-  .display {
-    @apply font-serif font-black tracking-[-0.02em] leading-[0.95];
+  /* tabloid kicker bar — heavy black ink, very small caps */
+  .kicker {
+    @apply inline-flex items-center gap-2 bg-foreground px-2 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-background;
+  }
+
+  .kicker--accent {
+    @apply bg-accent text-accent-foreground;
+  }
+
+  /* page-load entrance — single orchestrated reveal */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .reveal {
+    animation: rise 700ms cubic-bezier(0.2, 0.6, 0.2, 1) both;
+  }
+
+  .reveal-1 { animation-delay: 0ms; }
+  .reveal-2 { animation-delay: 90ms; }
+  .reveal-3 { animation-delay: 180ms; }
+  .reveal-4 { animation-delay: 270ms; }
+  .reveal-5 { animation-delay: 360ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      animation: none;
+    }
   }
 }

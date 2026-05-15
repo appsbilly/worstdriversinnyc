@@ -10,7 +10,7 @@ interface ViolationTableProps {
   pageSize?: number;
 }
 
-type Filter = "all" | "paid" | "unpaid";
+type Filter = "all" | "paid" | "unpaid" | "dismissed";
 
 export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProps) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -27,10 +27,10 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
   const rows = filtered.slice(start, start + pageSize);
 
   return (
-    <div className="rounded-xl border border-border">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="border-t-2 border-b border-foreground/85">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/15 px-1 py-2">
         <div className="flex gap-1">
-          {(["all", "paid", "unpaid"] as Filter[]).map((f) => (
+          {(["all", "paid", "unpaid", "dismissed"] as Filter[]).map((f) => (
             <button
               key={f}
               type="button"
@@ -39,7 +39,7 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
                 setPage(1);
               }}
               className={cn(
-                "rounded-md px-3 py-1 text-xs uppercase tracking-wider transition",
+                "px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] font-medium transition",
                 filter === f
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground",
@@ -49,47 +49,60 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           {filtered.length} {filtered.length === 1 ? "violation" : "violations"}
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 font-medium">date</th>
-              <th className="px-4 py-2 font-medium">type</th>
-              <th className="px-4 py-2 font-medium">location</th>
-              <th className="px-4 py-2 text-right font-medium">fine</th>
-              <th className="px-4 py-2 text-right font-medium">due</th>
-              <th className="px-4 py-2 font-medium">status</th>
+        <table className="w-full min-w-[640px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground border-b border-foreground/15">
+              <th className="px-1 py-2 text-left font-medium w-12">#</th>
+              <th className="px-1 py-2 text-left font-medium">date</th>
+              <th className="px-1 py-2 text-left font-medium">violation</th>
+              <th className="px-1 py-2 text-left font-medium">location</th>
+              <th className="px-1 py-2 text-right font-medium">fine</th>
+              <th className="px-1 py-2 text-right font-medium">due</th>
+              <th className="px-1 py-2 text-left font-medium">status</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  no violations match this filter.
+                <td colSpan={7} className="px-1 py-12 text-center">
+                  <p className="font-serif text-xl italic text-muted-foreground">
+                    no violations match this filter.
+                  </p>
                 </td>
               </tr>
             ) : (
-              rows.map((v) => (
-                <tr key={v.id} className="border-t border-border">
-                  <td className="px-4 py-2 whitespace-nowrap">{formatDate(v.issueDate)}</td>
-                  <td className="px-4 py-2">{v.violationType}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{v.location || "—"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">
+              rows.map((v, idx) => (
+                <tr
+                  key={v.id}
+                  className="border-b border-foreground/10 last:border-b-0 hover:bg-foreground/[0.03] transition-colors"
+                >
+                  <td className="px-1 py-3 align-top text-[11px] tabular text-muted-foreground">
+                    {start + idx + 1}
+                  </td>
+                  <td className="px-1 py-3 align-top whitespace-nowrap text-sm tabular">
+                    {formatDate(v.issueDate)}
+                  </td>
+                  <td className="px-1 py-3 align-top text-sm">{v.violationType}</td>
+                  <td className="px-1 py-3 align-top text-sm text-muted-foreground">
+                    {v.location || "—"}
+                  </td>
+                  <td className="px-1 py-3 align-top text-right tabular font-serif font-bold">
                     {formatCurrency(v.fineAmount)}
                   </td>
                   <td
                     className={cn(
-                      "px-4 py-2 text-right tabular-nums",
-                      v.amountDue > 0 && "text-danger",
+                      "px-1 py-3 align-top text-right tabular font-serif font-bold",
+                      v.amountDue > 0 ? "text-accent" : "text-muted-foreground",
                     )}
                   >
                     {formatCurrency(v.amountDue)}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-1 py-3 align-top">
                     <StatusPill status={v.status} />
                   </td>
                 </tr>
@@ -99,7 +112,7 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
         </table>
       </div>
       {totalPages > 1 ? (
-        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-foreground/15 px-1 py-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           <span>
             page {current} of {totalPages}
           </span>
@@ -108,17 +121,17 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={current === 1}
-              className="rounded-md border border-border px-3 py-1 disabled:opacity-40"
+              className="border-2 border-foreground/85 px-3 py-1 font-bold text-foreground hover:bg-foreground hover:text-background disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground"
             >
-              prev
+              ← prev
             </button>
             <button
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={current === totalPages}
-              className="rounded-md border border-border px-3 py-1 disabled:opacity-40"
+              className="border-2 border-foreground/85 px-3 py-1 font-bold text-foreground hover:bg-foreground hover:text-background disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground"
             >
-              next
+              next →
             </button>
           </div>
         </div>
@@ -129,15 +142,15 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
 
 function StatusPill({ status }: { status: Violation["status"] }) {
   const map: Record<Violation["status"], { label: string; cls: string }> = {
-    paid: { label: "paid", cls: "bg-ok/10 text-ok" },
-    unpaid: { label: "unpaid", cls: "bg-danger/10 text-danger" },
-    in_dispute: { label: "dispute", cls: "bg-warn/10 text-warn" },
-    dismissed: { label: "dismissed", cls: "bg-muted text-muted-foreground" },
-    unknown: { label: "—", cls: "bg-muted text-muted-foreground" },
+    paid:       { label: "paid",      cls: "border-ok/40 bg-ok/8 text-ok" },
+    unpaid:     { label: "unpaid",    cls: "border-accent/40 bg-accent/8 text-accent" },
+    in_dispute: { label: "dispute",   cls: "border-warn/40 bg-warn/10 text-warn" },
+    dismissed:  { label: "dismissed", cls: "border-foreground/20 bg-foreground/[0.04] text-muted-foreground" },
+    unknown:    { label: "—",         cls: "border-foreground/20 text-muted-foreground" },
   };
   const { label, cls } = map[status];
   return (
-    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider", cls)}>
+    <span className={cn("inline-flex border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.18em] font-bold", cls)}>
       {label}
     </span>
   );
