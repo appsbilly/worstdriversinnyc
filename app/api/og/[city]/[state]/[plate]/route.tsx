@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       totalFines = result.totalFinesIssued;
       totalOutstanding = result.totalFinesOutstanding;
       if (city.getRank) {
-        const r = await city.getRank(result.totalViolations);
+        const r = await city.getRank(result.totalViolations, result.totalFinesIssued);
         if (r) {
           rankNum = r.rank;
           rankTotal = r.total;

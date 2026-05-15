@@ -72,7 +72,7 @@ export default async function LookupPage({ params }: PageProps) {
   try {
     result = await city.lookup(plate, state);
     if (city.getRank) {
-      rank = await city.getRank(result.totalViolations);
+      rank = await city.getRank(result.totalViolations, result.totalFinesIssued);
     }
   } catch (e) {
     if (e instanceof CityNotYetSupportedError) {

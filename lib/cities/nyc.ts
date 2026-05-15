@@ -332,7 +332,10 @@ function defaultBuckets(): PercentileBuckets {
   };
 }
 
-async function getRank(violationCount: number): Promise<RankInfo | null> {
+async function getRank(
+  violationCount: number,
+  totalFines?: number,
+): Promise<RankInfo | null> {
   if (violationCount <= 0) return null;
   const hist = await cacheGet<Record<string, number>>(`rank_histogram:nyc`);
   if (!hist) return null;
@@ -345,6 +348,29 @@ async function getRank(violationCount: number): Promise<RankInfo | null> {
     if (count > violationCount) rank += plates;
   }
   if (total === 0) return null;
+
+  // Tie-break within the same ticket count by total fines, using the per-count
+  // fine-quantile table the refresh script writes. Approximate to 5%.
+  if (typeof totalFines === "number" && totalFines >= 0) {
+    const tieGroupSize = Number(hist[String(violationCount)] || 0);
+    const quantiles = await cacheGet<Record<string, number[]>>(`rank_fine_quantiles:nyc`);
+    const breaks = quantiles?.[String(violationCount)];
+    if (tieGroupSize > 0 && breaks && breaks.length === 21) {
+      // breaks[i] = the fine value at the (i*5)th percentile of plates with
+      // this exact ticket count. Find the highest i where breaks[i] <= my fines.
+      let percentileAtOrBelow = 0;
+      for (let i = breaks.length - 1; i >= 0; i--) {
+        if (totalFines >= breaks[i]!) {
+          percentileAtOrBelow = i * 5;
+          break;
+        }
+      }
+      // Fraction of the tie group with strictly higher fines than me.
+      const fractionAhead = Math.max(0, (100 - percentileAtOrBelow) / 100);
+      rank += Math.floor(tieGroupSize * fractionAhead);
+    }
+  }
+
   return { rank, total };
 }
 

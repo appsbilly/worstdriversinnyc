@@ -77,7 +77,11 @@ export interface CityAdapter {
   getLeaderboard(limit: number, window?: LeaderboardWindow): Promise<LeaderboardEntry[]>;
   getLeaderboardMeta?(window: LeaderboardWindow): Promise<LeaderboardMeta | null>;
   getPercentile(violationCount: number): Promise<number>;
-  getRank?(violationCount: number): Promise<RankInfo | null>;
+  /**
+   * Returns the plate's competition rank. When `totalFines` is provided, ties
+   * on ticket count are broken by fine quantile (approximate, 5% precision).
+   */
+  getRank?(violationCount: number, totalFines?: number): Promise<RankInfo | null>;
 }
 
 export class CityNotYetSupportedError extends Error {

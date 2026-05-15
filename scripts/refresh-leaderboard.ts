@@ -188,6 +188,35 @@ async function writeWindows(
     histogram[k] = (histogram[k] || 0) + 1;
   }
   await redis.set("rank_histogram:nyc", histogram, { ex: ttlSeconds });
+
+  // Per-count fine quantiles — used to break rank ties on total fines.
+  // For each unique ticket count, we record 21 breakpoints (p0, p5, p10, …, p100)
+  // of the fine distribution at that count. Lookup binary-searches into these
+  // breakpoints to estimate the plate's within-tie-group position by fines.
+  //
+  // Approximate, but precision is 5% of tie-group size (one in 20 sub-buckets).
+  // Storage ~5000 unique counts × 21 numbers × ~8 bytes ≈ 800KB JSON; ~100KB gzip.
+  const finesByCount = new Map<number, number[]>();
+  for (const b of aggs.all.values()) {
+    let arr = finesByCount.get(b.count);
+    if (!arr) {
+      arr = [];
+      finesByCount.set(b.count, arr);
+    }
+    arr.push(b.fines);
+  }
+  const fineQuantiles: Record<string, number[]> = {};
+  for (const [count, arr] of finesByCount) {
+    arr.sort((a, b) => a - b);
+    const breaks: number[] = new Array(21);
+    for (let i = 0; i <= 20; i++) {
+      const p = i * 5;
+      const idx = Math.min(arr.length - 1, Math.floor((p / 100) * arr.length));
+      breaks[i] = Math.round((arr[idx] ?? 0) * 100) / 100;
+    }
+    fineQuantiles[String(count)] = breaks;
+  }
+  await redis.set("rank_fine_quantiles:nyc", fineQuantiles, { ex: ttlSeconds });
 }
 
 async function main() {
