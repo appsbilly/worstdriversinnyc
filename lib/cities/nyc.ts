@@ -6,6 +6,7 @@ import {
   LeaderboardEntry,
   LeaderboardMeta,
   LeaderboardWindow,
+  OwnershipSignal,
   PercentileBuckets,
   PlateLookupResult,
   RankInfo,
@@ -211,6 +212,8 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
   const violations = rows.map(toViolation);
   violations.sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
 
+  const ownershipSignals = detectOwnershipSignals(rows);
+
   let paid = 0;
   let unpaid = 0;
   let dismissed = 0;
@@ -240,13 +243,91 @@ async function fetchLookupFresh(plate: string, state: string): Promise<PlateLook
     firstViolationDate: violations.length ? violations[violations.length - 1]!.issueDate : undefined,
     lastViolationDate: violations.length ? violations[0]!.issueDate : undefined,
     violations,
+    ownershipSignals,
     cityPortalUrl: NYC_PORTAL,
   };
 }
 
+/**
+ * Look for evidence in the raw SODA rows that this plate may have changed
+ * ownership. We don't have explicit transfer data, so we use two heuristics:
+ *
+ *  1. license_type changes between consecutive violations (e.g. PAS → COM).
+ *     The license_type maps to vehicle class; a real change strongly suggests
+ *     the plate was moved to a different vehicle (often with a new owner).
+ *  2. Long gaps in ticket activity (18+ months) followed by resumed activity.
+ *     Plates that go inactive for that long are often surrendered and reissued.
+ *
+ * Both are heuristic — we surface them as "signals" not "facts".
+ */
+function detectOwnershipSignals(rows: SodaRow[]): OwnershipSignal[] {
+  // sort chronologically (oldest first) using normalized ISO dates
+  const sorted = rows
+    .map((r) => ({ row: r, ts: Date.parse(toIsoDate(r.issue_date)) }))
+    .filter((x) => Number.isFinite(x.ts) && x.ts > 0)
+    .sort((a, b) => a.ts - b.ts);
+  if (sorted.length < 2) return [];
+
+  const signals: OwnershipSignal[] = [];
+  const seenKeys = new Set<string>();
+  const GAP_DAYS = 548; // ~18 months
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!;
+    const curr = sorted[i]!;
+
+    // (1) license_type change — only count meaningful values
+    const prevType = (prev.row.license_type || "").toUpperCase().trim();
+    const currType = (curr.row.license_type || "").toUpperCase().trim();
+    if (
+      prevType &&
+      currType &&
+      prevType !== currType &&
+      prevType !== "999" &&
+      currType !== "999"
+    ) {
+      const key = `lt:${currType}@${toIsoDate(curr.row.issue_date)}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        signals.push({
+          detectedAt: toIsoDate(curr.row.issue_date),
+          kind: "license_type_change",
+          detail: `vehicle class changed from ${prevType} to ${currType}`,
+        });
+      }
+    }
+
+    // (2) long gap
+    const gapDays = (curr.ts - prev.ts) / MS_PER_DAY;
+    if (gapDays >= GAP_DAYS) {
+      const key = `gap:${toIsoDate(curr.row.issue_date)}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        signals.push({
+          detectedAt: toIsoDate(curr.row.issue_date),
+          kind: "long_gap",
+          detail: `${Math.round(gapDays / 30)}-month gap in ticket activity`,
+        });
+      }
+    }
+  }
+
+  // De-dup overlapping signals on the same date (e.g. license type change +
+  // long gap at the same moment) — prefer license_type signal as the stronger.
+  const byDate = new Map<string, OwnershipSignal>();
+  for (const s of signals) {
+    const existing = byDate.get(s.detectedAt);
+    if (!existing || (s.kind === "license_type_change" && existing.kind !== "license_type_change")) {
+      byDate.set(s.detectedAt, s);
+    }
+  }
+  return [...byDate.values()].sort((a, b) => (a.detectedAt < b.detectedAt ? 1 : -1));
+}
+
 // Bump this when the shape/semantics of PlateLookupResult change so old
 // cache entries are skipped on the next request instead of serving stale data.
-const LOOKUP_CACHE_VERSION = 3;
+const LOOKUP_CACHE_VERSION = 4;
 
 async function lookup(plate: string, state: string): Promise<PlateLookupResult> {
   const normPlate = normalizePlate(plate);

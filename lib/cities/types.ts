@@ -14,6 +14,14 @@ export interface Violation {
   precinct?: string;
 }
 
+export interface OwnershipSignal {
+  /** ISO date of the violation that triggered the signal — interpreted as
+   *  "this is roughly when ownership may have changed". */
+  detectedAt: string;
+  kind: "license_type_change" | "long_gap";
+  detail: string;
+}
+
 export interface PlateLookupResult {
   city: string;
   plate: string;
@@ -28,6 +36,9 @@ export interface PlateLookupResult {
   firstViolationDate?: string;
   lastViolationDate?: string;
   violations: Violation[];
+  /** Heuristic indicators that the plate may have changed ownership. NYC's
+   *  open data doesn't include explicit transfer events; these are inferred. */
+  ownershipSignals?: OwnershipSignal[];
   cityPortalUrl?: string;
 }
 
