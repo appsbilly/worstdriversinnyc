@@ -25,10 +25,10 @@ export function Leaderboard({
   const [page, setPage] = useState(1);
   const scrollAnchor = useRef<HTMLDivElement | null>(null);
 
-  // Max ticket count across ALL entries — used to scale the bar widths so the
-  // visualization is comparable across pages (page 1's bars don't all max out).
+  // Max ticket count across the top 3 — used to scale bars only for the
+  // podium so the rest of the table reads as a clean list.
   const maxTickets = useMemo(
-    () => entries.reduce((m, e) => Math.max(m, e.violationCount), 1),
+    () => entries.slice(0, 3).reduce((m, e) => Math.max(m, e.violationCount), 1),
     [entries],
   );
 
@@ -54,15 +54,15 @@ export function Leaderboard({
   }
 
   return (
-    <div ref={scrollAnchor} className="rounded-xl border border-border scroll-mt-20">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="text-xs uppercase tracking-widest text-muted-foreground">
+    <div ref={scrollAnchor} className="rounded-xl border border-border scroll-mt-20 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border px-3 py-3 md:px-4">
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground md:text-xs">
           {compact ? `top ${rows.length} drivers` : `${formatNumber(entries.length)} drivers`} · {city}
         </span>
         <button
           type="button"
           onClick={() => setReveal((r) => !r)}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
         >
           {reveal ? "anonymize" : "reveal plates"}
         </button>
@@ -72,30 +72,35 @@ export function Leaderboard({
         {rows.map((e) => {
           const isTop1 = e.rank === 1;
           const isTop3 = e.rank <= 3;
-          const barPct = Math.max(2, (e.violationCount / maxTickets) * 100);
+          // Only show proportional bars on the podium — keeps the rest clean.
+          const barPct = isTop3 ? Math.max(8, (e.violationCount / maxTickets) * 100) : 0;
 
           return (
-            <div
+            <Link
               key={`${e.state}-${e.plate}-${e.rank}`}
-              className="relative isolate"
+              href={`/lookup/${city}/${e.state}/${e.plate}`}
+              className="relative isolate block hover:bg-foreground/[0.03] transition-colors"
             >
-              {/* Background bar — proportional fill, sits behind the row content */}
-              <div
-                className={cn(
-                  "absolute inset-y-0 left-0 -z-10",
-                  isTop1 ? "bg-accent/15" : isTop3 ? "bg-accent/8" : "bg-foreground/[0.04]",
-                )}
-                style={{ width: `${barPct}%` }}
-                aria-hidden
-              />
-              <div className="relative flex items-center gap-3 px-4 py-3 md:gap-5 md:py-4">
+              {/* Background bar — only for top 3 */}
+              {isTop3 ? (
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 -z-10",
+                    isTop1 ? "bg-accent/15" : "bg-accent/8",
+                  )}
+                  style={{ width: `${barPct}%` }}
+                  aria-hidden
+                />
+              ) : null}
+
+              <div className="relative flex items-center gap-3 px-3 py-3 md:gap-5 md:px-4 md:py-4">
                 {/* rank */}
                 <div
                   className={cn(
-                    "w-10 shrink-0 text-left font-display font-black leading-none tabular md:w-14",
-                    isTop1 ? "text-3xl text-accent md:text-4xl" : "text-2xl md:text-3xl",
+                    "w-8 shrink-0 text-left font-display font-black leading-none tabular md:w-12",
+                    isTop1 ? "text-2xl text-accent md:text-4xl" : "text-xl md:text-3xl",
                     !isTop1 && isTop3 && "text-accent/70",
-                    !isTop3 && "text-foreground/70",
+                    !isTop3 && "text-foreground/60",
                   )}
                 >
                   {e.rank}
@@ -103,28 +108,19 @@ export function Leaderboard({
 
                 {/* plate + state suffix */}
                 <div className="min-w-0 flex-1 flex items-baseline gap-2">
-                  {reveal ? (
-                    <Link
-                      href={`/lookup/${city}/${e.state}/${e.plate}`}
-                      className="font-mono font-bold tracking-[0.12em] text-base md:text-lg hover:text-accent transition-colors truncate"
-                    >
-                      {e.plate}
-                    </Link>
-                  ) : (
-                    <span className="font-mono font-bold tracking-[0.12em] text-base md:text-lg text-muted-foreground">
-                      {anonymizePlate(e.plate)}
-                    </span>
-                  )}
+                  <span className="font-mono font-bold tracking-[0.1em] text-sm md:text-lg truncate">
+                    {reveal ? e.plate : anonymizePlate(e.plate)}
+                  </span>
                   <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
                     {e.state}
                   </span>
                 </div>
 
-                {/* tickets — primary metric, bold */}
+                {/* tickets — primary metric */}
                 <div
                   className={cn(
                     "shrink-0 text-right tabular font-display font-black",
-                    isTop1 ? "text-2xl text-accent md:text-3xl" : "text-xl md:text-2xl",
+                    isTop1 ? "text-xl text-accent md:text-3xl" : "text-lg md:text-2xl",
                     !isTop1 && isTop3 && "text-accent/70",
                   )}
                 >
@@ -134,18 +130,18 @@ export function Leaderboard({
                   tickets
                 </div>
 
-                {/* fines — secondary, smaller */}
-                <div className="hidden sm:block shrink-0 text-right tabular text-sm text-muted-foreground w-16 md:w-20">
+                {/* fines — secondary */}
+                <div className="hidden sm:block shrink-0 text-right tabular text-xs text-muted-foreground w-12 md:text-sm md:w-20">
                   {formatCurrency(e.totalFines, { compact: true })}
                 </div>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
 
       {!compact && totalPages > 1 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-3 text-xs text-muted-foreground md:px-4">
           <div>
             showing <span className="text-foreground tabular">#{start + 1}–{Math.min(end, entries.length)}</span> of{" "}
             <span className="text-foreground tabular">{formatNumber(entries.length)}</span>
@@ -173,7 +169,7 @@ function PaginationControls({
         type="button"
         onClick={() => onChange(current - 1)}
         disabled={current === 1}
-        className="rounded-md border border-border px-3 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
+        className="rounded-md border border-border px-3 py-1.5 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
       >
         prev
       </button>
@@ -202,7 +198,7 @@ function PaginationControls({
         type="button"
         onClick={() => onChange(current + 1)}
         disabled={current === total}
-        className="rounded-md border border-border px-3 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
+        className="rounded-md border border-border px-3 py-1.5 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
       >
         next
       </button>

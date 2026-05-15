@@ -66,14 +66,14 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
             </p>
             <p
               className={cn(
-                "mt-1 font-display font-black leading-[0.9] tracking-[-0.035em] tabular",
+                "mt-1 font-display font-black leading-[0.9] tracking-[-0.035em] tabular break-words",
                 accentText,
               )}
-              style={{ fontSize: "clamp(3rem, 10vw, 7.5rem)" }}
+              style={{ fontSize: "clamp(2.5rem, 10vw, 7.5rem)" }}
             >
               {ordinalRank(rank.rank)}
             </p>
-            <p className="mt-2 font-serif italic text-2xl tracking-tight md:text-4xl">
+            <p className="mt-2 font-serif italic text-xl tracking-tight sm:text-2xl md:text-4xl">
               worst driver in {cityShortName}.
             </p>
             <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -86,12 +86,12 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
               ticketed
             </p>
             <p
-              className="mt-1 font-display font-black leading-[0.9] tracking-[-0.035em] tabular"
-              style={{ fontSize: "clamp(3rem, 10vw, 7.5rem)" }}
+              className="mt-1 font-display font-black leading-[0.9] tracking-[-0.035em] tabular break-words"
+              style={{ fontSize: "clamp(2.5rem, 10vw, 7.5rem)" }}
             >
               {formatNumber(result.totalViolations)}×
             </p>
-            <p className="mt-2 font-serif italic text-2xl tracking-tight md:text-4xl">
+            <p className="mt-2 font-serif italic text-xl tracking-tight sm:text-2xl md:text-4xl">
               in {cityShortName}.
             </p>
             <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">

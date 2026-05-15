@@ -20,7 +20,7 @@ export function PlateReveal({ plate, state, className }: PlateRevealProps) {
       <button
         type="button"
         onClick={() => setHidden((h) => !h)}
-        className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex h-9 items-center px-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
       >
         {hidden ? "show plate" : "hide plate"}
       </button>
