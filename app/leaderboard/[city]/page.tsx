@@ -72,7 +72,9 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
   let entries: Awaited<ReturnType<typeof city.getLeaderboard>> = [];
   let meta: Awaited<ReturnType<NonNullable<typeof city.getLeaderboardMeta>>> | null = null;
   try {
-    entries = await city.getLeaderboard(100, window);
+    // pull the full stored set (500 per window from the refresh job) so the
+    // page can paginate client-side without re-fetching
+    entries = await city.getLeaderboard(500, window);
   } catch {
     entries = [];
   }
