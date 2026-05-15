@@ -129,6 +129,7 @@ async function writeWindows(
   ranges: Record<Window, { min: number; max: number }>,
   totalRows: number,
   ttlSeconds: number,
+  isFinal: boolean,
 ) {
   for (const w of WINDOWS) {
     // Sort by ticket count desc, then total fines desc as the tiebreaker
@@ -161,6 +162,14 @@ async function writeWindows(
   // legacy key for fallback compatibility
   const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
   if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: ttlSeconds });
+
+  // Rank-related data structures (histogram, fine quantiles, percentile buckets)
+  // are ONLY written on the final flush of a run. During incremental flushes the
+  // partial dataset would have an artificially small denominator (fewer unique
+  // plates indexed so far) and would make the rank badge fluctuate wildly while
+  // a refresh is in progress. By only writing on completion we keep the badge
+  // stable on the previous run's numbers until the new run finishes.
+  if (!isFinal) return;
 
   // percentile buckets from the broadest (all) window
   const allCounts = [...aggs.all.values()].map((b) => b.count).sort((a, b) => a - b);
@@ -318,12 +327,15 @@ async function main() {
     }
     if (pageIndex % FLUSH_EVERY_PAGES === 0) {
       const flushStart = Date.now();
-      await writeWindows(redis, aggs, ranges, totalRows, TTL);
-      console.log(`  ↳ flushed to redis (${Date.now() - flushStart}ms)`);
+      await writeWindows(redis, aggs, ranges, totalRows, TTL, /* isFinal */ false);
+      console.log(`  ↳ flushed leaderboards to redis (${Date.now() - flushStart}ms)`);
     }
   }
 
-  await writeWindows(redis, aggs, ranges, totalRows, TTL);
+  // Final flush — leaderboards + rank histogram + fine quantiles + percentiles.
+  // Rank-related keys are only written here so the badge stays stable on the
+  // previous run's data throughout an in-progress refresh.
+  await writeWindows(redis, aggs, ranges, totalRows, TTL, /* isFinal */ true);
 
   const elapsedS = Math.round((Date.now() - startedAt) / 1000);
   console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned.`);
