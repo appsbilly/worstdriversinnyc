@@ -131,7 +131,15 @@ async function writeWindows(
   ttlSeconds: number,
 ) {
   for (const w of WINDOWS) {
-    const sorted = [...aggs[w].values()].sort((a, b) => b.count - a.count);
+    // Sort by ticket count desc, then total fines desc as the tiebreaker
+    // (a plate with $300 in fines outranks one with $100 at the same ticket
+    // count). plate code is the final deterministic tiebreaker so runs are
+    // reproducible.
+    const sorted = [...aggs[w].values()].sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      if (b.fines !== a.fines) return b.fines - a.fines;
+      return a.plate.localeCompare(b.plate);
+    });
     const leaderboard = sorted.slice(0, 500).map((e, i) => ({
       rank: i + 1,
       plate: e.plate,
