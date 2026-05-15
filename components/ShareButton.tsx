@@ -4,12 +4,9 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
-  /** Specific URL used by the "copy link" button (typically the plate's lookup page). */
+  /** Specific URL used by both buttons. Tweet uses it so the OG card surfaces. */
   copyUrl: string;
-  /**
-   * Pre-composed tweet text. Should contain the bare site domain at the end
-   * (no specific plate URL) so broadcasting doesn't dox the looked-up plate.
-   */
+  /** Pre-composed tweet text. Twitter appends the URL automatically. */
   tweetText: string;
   className?: string;
 }
@@ -17,9 +14,9 @@ interface ShareButtonProps {
 export function ShareButton({ copyUrl, tweetText, className }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  // No `url` param — embedding the lookup URL would defeat the point. Twitter
-  // auto-linkifies the bare domain that's already in the tweet text.
-  const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+  const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+    tweetText,
+  )}&url=${encodeURIComponent(copyUrl)}`;
 
   async function copy() {
     try {

@@ -101,20 +101,18 @@ export default async function LookupPage({ params }: PageProps) {
   }
 
   const siteUrl = getSiteUrl();
-  // The "copy link" action deliberately points to the specific record so the
-  // user can paste it intentionally. The "tweet this" action is broadcast and
-  // would dox the plate — so we strip that down to the bare domain instead.
+  // Tweet uses the lookup URL so the plate's OG card (rank badge image) surfaces
+  // in the tweet preview. The image already tells the story; the prose echoes it.
   const shareUrl = `${siteUrl}/lookup/${city.id}/${state}/${plate}`;
-  const tweetDomain = siteUrl.replace(/^https?:\/\/(www\.)?/, "");
   const cityShort = city.shortName.toLowerCase();
   const finesStr = formatCurrency(result.totalFinesIssued, { compact: true });
   let tweetText: string;
   if (result.totalViolations === 0) {
-    tweetText = `i have a clean driving record in ${cityShort}. boring. ${tweetDomain}`;
+    tweetText = `i have a clean driving record in ${cityShort}. boring.`;
   } else if (rank && rank.total > 0) {
-    tweetText = `i am the ${ordinalRank(rank.rank)} worst driver in ${cityShort} with ${finesStr} in fines. ${tweetDomain}`;
+    tweetText = `i am the ${ordinalRank(rank.rank)} worst driver in ${cityShort} with ${finesStr} in fines.`;
   } else {
-    tweetText = `i have ${formatNumber(result.totalViolations)} tickets and ${finesStr} in fines in ${cityShort}. ${tweetDomain}`;
+    tweetText = `i have ${formatNumber(result.totalViolations)} tickets and ${finesStr} in fines in ${cityShort}.`;
   }
 
   return (

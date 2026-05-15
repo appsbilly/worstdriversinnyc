@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, ordinalRank } from "@/lib/format";
 
 interface RankBadgeProps {
   /** 1 = worst driver. Null if no rank could be computed (clean record or data missing). */
@@ -59,17 +59,20 @@ export function RankBadge({ rank, total, city, totalViolations, className }: Ran
   return (
     <div
       className={cn(
-        "inline-flex flex-col items-center justify-center rounded-2xl border-2 px-6 py-5",
+        "inline-flex flex-col items-center justify-center rounded-2xl border-2 px-6 py-5 text-center",
         colorCls,
         className,
       )}
     >
-      <span className="text-xs uppercase tracking-widest opacity-80">rank</span>
-      <span className="font-display font-black text-4xl leading-none md:text-5xl tabular tracking-[-0.02em]">
-        #{formatNumber(rank)}
+      <span className="text-xs uppercase tracking-[0.2em] opacity-80">the</span>
+      <span className="font-display font-black text-4xl leading-none md:text-5xl tabular tracking-[-0.02em] mt-1">
+        {ordinalRank(rank)}
       </span>
-      <span className="mt-1 text-xs uppercase tracking-widest opacity-80">
-        of {formatNumber(total)} {city} drivers
+      <span className="font-serif italic text-2xl leading-none mt-2 md:text-3xl">
+        worst driver
+      </span>
+      <span className="mt-2 text-[10px] uppercase tracking-[0.22em] opacity-70">
+        of {formatNumber(total)} in {city}
       </span>
     </div>
   );
