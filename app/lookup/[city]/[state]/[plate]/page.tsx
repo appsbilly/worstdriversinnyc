@@ -1,6 +1,4 @@
-import { ResultCard } from "@/components/ResultCard";
-import { ShareButton } from "@/components/ShareButton";
-import { ViolationTable } from "@/components/ViolationTable";
+import { LookupResultView } from "@/components/LookupResultView";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { getCity } from "@/lib/cities";
 import {
@@ -68,12 +66,16 @@ export default async function LookupPage({ params }: PageProps) {
 
   let result: PlateLookupResult | null = null;
   let rank: RankInfo | null = null;
+  let histogram: Record<string, number> | null = null;
   let err: string | null = null;
 
   try {
     result = await city.lookup(plate, state);
     if (city.getRank) {
       rank = await city.getRank(result.totalViolations, result.totalFinesIssued);
+    }
+    if (city.getRankHistogram) {
+      histogram = await city.getRankHistogram();
     }
   } catch (e) {
     if (e instanceof CityNotYetSupportedError) {
@@ -125,62 +127,19 @@ export default async function LookupPage({ params }: PageProps) {
       </Link>
 
       <div className="mt-4">
-        <ResultCard result={result} rank={rank} cityShortName={cityShort} />
-      </div>
-
-      <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <ShareButton
-          copyUrl={shareUrl}
+        <LookupResultView
+          result={result}
+          rank={rank}
+          histogram={histogram}
+          cityShortName={cityShort}
+          cityPortalUrl={result.cityPortalUrl}
+          shareUrl={shareUrl}
           tweetSiteUrl={siteUrl}
           plate={plate}
           state={state}
           tweetText={tweetText}
         />
-        {result.cityPortalUrl ? (
-          <a
-            href={result.cityPortalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm underline decoration-muted-foreground underline-offset-4 hover:text-foreground"
-          >
-            pay or contest at the official {city.shortName} portal →
-          </a>
-        ) : null}
       </div>
-
-      <p className="mt-4 rounded-md border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-        this data reflects the vehicle, not the current owner. plates change hands; this record does not follow people.
-      </p>
-
-      {result.ownershipSignals && result.ownershipSignals.length > 0 ? (
-        <div className="mt-3 rounded-md border border-warn/30 bg-warn/5 px-4 py-3 text-xs">
-          <p className="font-semibold uppercase tracking-[0.18em] text-warn">
-            possible ownership change
-          </p>
-          <ul className="mt-2 space-y-1 text-muted-foreground">
-            {result.ownershipSignals.slice(0, 3).map((s) => (
-              <li key={`${s.kind}-${s.detectedAt}`}>
-                <span className="text-foreground">{formatDate(s.detectedAt)}</span> · {s.detail}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-muted-foreground">
-            violations before the most recent signal may belong to a previous owner. nyc's open
-            data doesn't include transfer events directly — these are inferred from the data.
-          </p>
-        </div>
-      ) : null}
-
-      <section className="mt-10">
-        <h2 className="mb-3 font-serif text-2xl font-black tracking-tight">violations</h2>
-        {result.violations.length === 0 ? (
-          <div className="rounded-xl border border-border p-8 text-center text-muted-foreground">
-            clean record. boring.
-          </div>
-        ) : (
-          <ViolationTable violations={result.violations} />
-        )}
-      </section>
     </div>
   );
 }

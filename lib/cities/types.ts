@@ -93,6 +93,13 @@ export interface CityAdapter {
    * on ticket count are broken by fine quantile (approximate, 5% precision).
    */
   getRank?(violationCount: number, totalFines?: number): Promise<RankInfo | null>;
+  /**
+   * Returns the raw rank histogram (count → number of plates at that count)
+   * so the client can re-rank a plate against the all-time distribution after
+   * the user applies a date filter. Sent to the page render once; client does
+   * the re-rank locally for instant feedback.
+   */
+  getRankHistogram?(): Promise<Record<string, number> | null>;
 }
 
 export class CityNotYetSupportedError extends Error {

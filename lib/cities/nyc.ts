@@ -413,6 +413,10 @@ function defaultBuckets(): PercentileBuckets {
   };
 }
 
+async function getRankHistogram(): Promise<Record<string, number> | null> {
+  return (await cacheGet<Record<string, number>>(`rank_histogram:nyc`)) ?? null;
+}
+
 async function getRank(
   violationCount: number,
   totalFines?: number,
@@ -520,4 +524,5 @@ export const nycAdapter: CityAdapter = {
   getLeaderboardMeta,
   getPercentile,
   getRank,
+  getRankHistogram,
 };
