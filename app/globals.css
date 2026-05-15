@@ -77,9 +77,10 @@
   }
 
   .stat-hero {
-    @apply font-serif font-black leading-[0.95] tracking-[-0.03em];
+    @apply font-display leading-[0.92] tracking-[-0.04em];
     font-size: clamp(3.5rem, 11vw, 8rem);
     font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum", "tnum";
   }
 
   .stat-num {

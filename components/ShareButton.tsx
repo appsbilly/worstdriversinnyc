@@ -4,21 +4,26 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
-  url: string;
-  text: string;
+  /** Specific URL used by the "copy link" button (typically the plate's lookup page). */
+  copyUrl: string;
+  /**
+   * Pre-composed tweet text. Should contain the bare site domain at the end
+   * (no specific plate URL) so broadcasting doesn't dox the looked-up plate.
+   */
+  tweetText: string;
   className?: string;
 }
 
-export function ShareButton({ url, text, className }: ShareButtonProps) {
+export function ShareButton({ copyUrl, tweetText, className }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-    text,
-  )}&url=${encodeURIComponent(url)}`;
+  // No `url` param — embedding the lookup URL would defeat the point. Twitter
+  // auto-linkifies the bare domain that's already in the tweet text.
+  const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(copyUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

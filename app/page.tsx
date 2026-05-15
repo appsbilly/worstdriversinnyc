@@ -69,8 +69,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           see where it ranks.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
-          every ticket, every fine, ranked against every other plate in the city. it's
-          public data, finally readable.
+          every ticket, every fine, ranked against every other plate in the city.
         </p>
         <div className="mx-auto mt-8 max-w-2xl">
           <PlateSearch size="hero" />

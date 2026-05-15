@@ -20,6 +20,7 @@ const config: Config = {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         serif: ["var(--font-serif)", "Georgia", "serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "var(--font-serif)", "system-ui", "sans-serif"],
       },
       colors: {
         background: "hsl(var(--background))",

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/utils";
-import { Fraunces, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Instrument_Sans, JetBrains_Mono, Archivo_Black } from "next/font/google";
 
 const serif = Fraunces({
   subsets: ["latin"],
@@ -20,6 +20,15 @@ const sans = Instrument_Sans({
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
+});
+
+// Heavy geometric sans for big shareable numerals — much more legible than
+// Fraunces at huge sizes, where its decorative 4s and 2s get illegible.
+const display = Archivo_Black({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -58,7 +67,7 @@ export default function RootLayout({
 }) {
   const plausibleDomain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable} ${display.variable}`}>
       <head>
         {plausibleDomain ? (
           <script
