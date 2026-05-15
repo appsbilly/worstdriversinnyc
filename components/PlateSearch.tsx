@@ -106,14 +106,20 @@ export function PlateSearch({
           value={state}
           onChange={(e) => setState(e.target.value)}
           className={cn(
-            "rounded-md border border-border bg-background px-3 text-sm md:w-40",
+            "rounded-md border border-border bg-background px-4 uppercase font-mono font-black focus:outline-none focus:ring-2 focus:ring-accent/40 md:w-28",
             fieldHeight,
+            size === "hero" ? "text-3xl tracking-[0.12em]" : "text-xl tracking-[0.12em]",
           )}
           aria-label="state"
         >
           {US_STATES.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.code} — {s.name}
+            <option
+              key={s.code}
+              value={s.code}
+              className="font-sans font-normal text-base tracking-normal"
+              title={s.name}
+            >
+              {s.code}
             </option>
           ))}
         </select>
