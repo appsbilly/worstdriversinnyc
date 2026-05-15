@@ -12,7 +12,7 @@ interface WindowTabsProps {
 export function WindowTabs({ basePath, windows, active, hash }: WindowTabsProps) {
   return (
     <div
-      className="inline-flex rounded-md border border-border bg-background p-1"
+      className="inline-flex max-w-full overflow-x-auto rounded-md border border-border bg-background p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       role="tablist"
     >
       {windows.map((w) => {
@@ -25,7 +25,7 @@ export function WindowTabs({ basePath, windows, active, hash }: WindowTabsProps)
             role="tab"
             aria-selected={isActive}
             className={cn(
-              "rounded px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition",
+              "shrink-0 rounded px-3 py-2 text-xs font-medium uppercase tracking-wider transition whitespace-nowrap",
               isActive
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",

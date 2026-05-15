@@ -116,7 +116,7 @@ export default async function LookupPage({ params }: PageProps) {
   }
 
   return (
-    <div className="container py-10 md:py-12 max-w-5xl">
+    <div className="container py-6 md:py-12 max-w-5xl">
       <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">
         ← back
       </Link>

@@ -58,31 +58,31 @@ export default async function HomePage({ searchParams }: PageProps) {
       : null;
 
   return (
-    <div className="container py-10 md:py-16">
+    <div className="container py-8 md:py-16">
       <section className="mx-auto max-w-3xl text-center">
-        <p className="mb-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted-foreground md:text-xs">
           public records · open data · no accounts
         </p>
-        <h1 className="font-serif text-5xl font-black leading-[1.02] tracking-[-0.025em] md:text-7xl">
+        <h1 className="font-serif text-4xl font-black leading-[1.04] tracking-[-0.025em] sm:text-5xl md:text-7xl">
           look up any nyc plate.
           <br />
           see where it ranks.
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
+        <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground md:mt-5 md:text-lg">
           every ticket, every fine, ranked against every other plate in the city.
         </p>
-        <div className="mx-auto mt-8 max-w-2xl">
+        <div className="mx-auto mt-6 max-w-2xl md:mt-8">
           <PlateSearch size="hero" />
         </div>
       </section>
 
-      <section id="leaderboard" className="mt-16 scroll-mt-16 md:mt-24">
+      <section id="leaderboard" className="mt-12 scroll-mt-16 md:mt-24">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="font-serif text-3xl font-black tracking-tight md:text-4xl">
+            <h2 className="font-serif text-2xl font-black tracking-tight md:text-4xl">
               {WINDOW_HEADLINES[window]}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground md:text-sm">
               {range ? (
                 <>tickets issued <span className="text-foreground">{range}</span></>
               ) : (
@@ -92,7 +92,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
           <Link
             href={`/leaderboard/nyc?window=${window}`}
-            className="text-sm text-muted-foreground hover:text-foreground self-start md:self-auto"
+            className="text-xs text-muted-foreground hover:text-foreground self-start md:self-auto md:text-sm"
           >
             full leaderboard →
           </Link>

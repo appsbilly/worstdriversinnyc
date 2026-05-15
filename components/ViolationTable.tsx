@@ -28,8 +28,8 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
 
   return (
     <div className="rounded-xl border border-border">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 md:px-4 md:py-3">
+        <div className="flex flex-wrap gap-1">
           {(["all", "paid", "unpaid", "dismissed"] as Filter[]).map((f) => (
             <button
               key={f}
@@ -39,7 +39,7 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
                 setPage(1);
               }}
               className={cn(
-                "rounded-md px-3 py-1 text-xs uppercase tracking-wider transition",
+                "rounded-md px-2.5 py-1.5 text-xs uppercase tracking-wider transition md:px-3 md:py-1",
                 filter === f
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground",
@@ -54,15 +54,15 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-4 py-2 font-medium">date</th>
-              <th className="px-4 py-2 font-medium">type</th>
-              <th className="px-4 py-2 font-medium">location</th>
-              <th className="px-4 py-2 text-right font-medium">fine</th>
-              <th className="px-4 py-2 text-right font-medium">due</th>
-              <th className="px-4 py-2 font-medium">status</th>
+              <th className="px-3 py-2 font-medium md:px-4">date</th>
+              <th className="px-3 py-2 font-medium md:px-4">type</th>
+              <th className="hidden lg:table-cell px-4 py-2 font-medium">location</th>
+              <th className="px-3 py-2 text-right font-medium md:px-4">fine</th>
+              <th className="hidden md:table-cell px-4 py-2 text-right font-medium">due</th>
+              <th className="px-3 py-2 font-medium md:px-4">status</th>
             </tr>
           </thead>
           <tbody>
@@ -75,19 +75,23 @@ export function ViolationTable({ violations, pageSize = 25 }: ViolationTableProp
             ) : (
               rows.map((v) => (
                 <tr key={v.id} className="border-t border-border">
-                  <td className="px-4 py-2 whitespace-nowrap">{formatDate(v.issueDate)}</td>
-                  <td className="px-4 py-2">{v.violationType}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{v.location || "—"}</td>
-                  <td className="px-4 py-2 text-right tabular">{formatCurrency(v.fineAmount)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap md:px-4">{formatDate(v.issueDate)}</td>
+                  <td className="px-3 py-2 md:px-4">{v.violationType}</td>
+                  <td className="hidden lg:table-cell px-4 py-2 text-muted-foreground">
+                    {v.location || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular md:px-4">
+                    {formatCurrency(v.fineAmount)}
+                  </td>
                   <td
                     className={cn(
-                      "px-4 py-2 text-right tabular",
+                      "hidden md:table-cell px-4 py-2 text-right tabular",
                       v.amountDue > 0 && "text-danger",
                     )}
                   >
                     {formatCurrency(v.amountDue)}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-2 md:px-4">
                     <StatusPill status={v.status} />
                   </td>
                 </tr>

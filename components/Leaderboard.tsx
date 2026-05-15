@@ -61,27 +61,27 @@ export function Leaderboard({
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-4 py-2 font-medium w-12">#</th>
-              <th className="px-4 py-2 font-medium">plate</th>
-              <th className="px-4 py-2 font-medium w-16">state</th>
-              <th className="px-4 py-2 text-right font-medium">tickets</th>
-              <th className="px-4 py-2 text-right font-medium">fines</th>
+              <th className="px-3 py-2 font-medium w-10 md:px-4 md:w-12">#</th>
+              <th className="px-3 py-2 font-medium md:px-4">plate</th>
+              <th className="px-2 py-2 font-medium md:px-4">state</th>
+              <th className="px-3 py-2 text-right font-medium md:px-4">tickets</th>
+              <th className="hidden md:table-cell px-4 py-2 text-right font-medium">fines</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((e) => (
               <tr key={`${e.state}-${e.plate}-${e.rank}`} className="border-t border-border">
                 <td className={cn(
-                  "px-4 py-2 tabular font-semibold",
+                  "px-3 py-2 tabular font-semibold md:px-4",
                   e.rank === 1 && "text-accent",
                   e.rank > 1 && e.rank <= 3 && "text-accent/70",
                 )}>
                   {e.rank}
                 </td>
-                <td className="px-4 py-2 font-mono font-bold tracking-wider">
+                <td className="px-3 py-2 font-mono font-bold tracking-wider md:px-4">
                   {reveal ? (
                     <Link
                       href={`/lookup/${city}/${e.state}/${e.plate}`}
@@ -93,17 +93,17 @@ export function Leaderboard({
                     anonymizePlate(e.plate)
                   )}
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">{e.state}</td>
+                <td className="px-2 py-2 text-muted-foreground md:px-4">{e.state}</td>
                 <td
                   className={cn(
-                    "px-4 py-2 text-right tabular font-semibold",
+                    "px-3 py-2 text-right tabular font-semibold md:px-4",
                     e.rank === 1 && "text-accent",
                     e.rank > 1 && e.rank <= 3 && "text-accent/70",
                   )}
                 >
                   {formatNumber(e.violationCount)}
                 </td>
-                <td className="px-4 py-2 text-right tabular text-muted-foreground">
+                <td className="hidden md:table-cell px-4 py-2 text-right tabular text-muted-foreground">
                   {formatCurrency(e.totalFines, { compact: true })}
                 </td>
               </tr>

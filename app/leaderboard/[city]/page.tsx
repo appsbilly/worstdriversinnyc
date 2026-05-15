@@ -89,14 +89,14 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
       : null;
 
   return (
-    <div className="container py-10 max-w-5xl">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground">
+    <div className="container py-8 max-w-5xl md:py-10">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground md:text-xs">
         {city.shortName} · leaderboard
       </p>
-      <h1 className="mt-2 font-serif text-4xl font-black tracking-tight md:text-5xl">
+      <h1 className="mt-2 font-serif text-3xl font-black tracking-tight md:text-5xl">
         the worst drivers in {city.shortName.toLowerCase()}.
       </h1>
-      <p className="mt-2 max-w-xl text-muted-foreground">
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground md:text-base">
         ranked by ticket count from nyc's open-data feed over the selected window.
       </p>
       <div className="mt-6">
