@@ -60,3 +60,25 @@ export function ordinalRank(rank: number): string {
   const suffix = s[(v - 20) % 10] || s[v] || s[0];
   return `${formatNumber(rank)}${suffix}`;
 }
+
+/**
+ * Decode the share-token used by the tweet-this button into `{ plate, state }`.
+ * The token is just base64url-encoded "STATE|PLATE" — not a security boundary,
+ * just casual obfuscation so the plate isn't immediately readable in the URL.
+ */
+export function decodeBadgeToken(token: string | undefined): { plate: string; state: string } | null {
+  if (!token) return null;
+  try {
+    const b64 = token.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "=");
+    const raw = typeof atob === "function" ? atob(padded) : Buffer.from(padded, "base64").toString("utf8");
+    const [state, plate] = raw.split("|");
+    if (!state || !plate) return null;
+    const normPlate = normalizePlate(plate);
+    const normState = normalizeState(state);
+    if (!isValidPlate(normPlate) || normState.length !== 2) return null;
+    return { plate: normPlate, state: normState };
+  } catch {
+    return null;
+  }
+}

@@ -3,6 +3,8 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { WindowTabs } from "@/components/WindowTabs";
 import { nycAdapter } from "@/lib/cities/nyc";
 import { LeaderboardWindow } from "@/lib/cities/types";
+import { decodeBadgeToken } from "@/lib/format";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 const WINDOWS: LeaderboardWindow[] = ["1w", "1m", "1y", "all"];
@@ -32,7 +34,30 @@ function fmtIso(iso: string): string {
 }
 
 interface PageProps {
-  searchParams: { window?: string };
+  searchParams: { window?: string; b?: string };
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  // When the home page is loaded with a `?b=` share token, dynamically swap the
+  // og:image to the personal badge for that plate so a tweet preview shows the
+  // user's stats. Humans clicking the link still land on the home page (we
+  // ignore the param for rendering below), so the personal lookup URL is never
+  // exposed.
+  const decoded = decodeBadgeToken(searchParams.b);
+  if (!decoded) return {};
+  return {
+    openGraph: {
+      images: [{
+        url: `/api/og/nyc/${decoded.state}/${decoded.plate}`,
+        width: 1200,
+        height: 630,
+      }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      images: [`/api/og/nyc/${decoded.state}/${decoded.plate}`],
+    },
+  };
 }
 
 export default async function HomePage({ searchParams }: PageProps) {

@@ -101,13 +101,11 @@ export default async function LookupPage({ params }: PageProps) {
   }
 
   const siteUrl = getSiteUrl();
-  // Two different URLs intentionally:
-  //  - copyUrl: the specific lookup. user is intentionally sharing the record.
-  //  - tweetUrl: the bare site domain. broadcasting the lookup URL would publish
-  //    the plate to anyone who saw the tweet — doxxy. So the tweet links to the
-  //    home page; the prose says the rank but the URL doesn't leak the plate.
+  // copy link is the specific lookup (deliberate user share).
+  // tweet links to the home page; ShareButton appends a `?b=<token>` so the
+  // home page's og:image renders the personal badge in the tweet preview
+  // — without the clickable URL leaking the plate.
   const shareUrl = `${siteUrl}/lookup/${city.id}/${state}/${plate}`;
-  const tweetUrl = siteUrl.replace(/\/+$/, "");
   const cityShort = city.shortName.toLowerCase();
   const finesStr = formatCurrency(result.totalFinesIssued, { compact: true });
   let tweetText: string;
@@ -130,7 +128,13 @@ export default async function LookupPage({ params }: PageProps) {
       </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <ShareButton copyUrl={shareUrl} tweetUrl={tweetUrl} tweetText={tweetText} />
+        <ShareButton
+          copyUrl={shareUrl}
+          tweetSiteUrl={siteUrl}
+          plate={plate}
+          state={state}
+          tweetText={tweetText}
+        />
         {result.cityPortalUrl ? (
           <a
             href={result.cityPortalUrl}

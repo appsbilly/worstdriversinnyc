@@ -6,15 +6,32 @@ import { cn } from "@/lib/utils";
 interface ShareButtonProps {
   /** URL the "copy link" action puts on the clipboard. Typically the specific lookup URL. */
   copyUrl: string;
-  /** URL Twitter attaches to the tweet. Use the bare site domain to avoid doxxing the looked-up plate. */
-  tweetUrl: string;
+  /** Bare site URL (e.g. https://www.worstdriversinnyc.com) that the tweet links to. */
+  tweetSiteUrl: string;
+  /** Plate + state used to build a query string so the home page's OG image renders the personal badge. */
+  plate: string;
+  state: string;
   /** Pre-composed tweet text. */
   tweetText: string;
   className?: string;
 }
 
-export function ShareButton({ copyUrl, tweetUrl, tweetText, className }: ShareButtonProps) {
+export function ShareButton({
+  copyUrl,
+  tweetSiteUrl,
+  plate,
+  state,
+  tweetText,
+  className,
+}: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
+
+  // Tweet URL is the home page with the plate encoded as a query param. The home
+  // page's `generateMetadata` reads `b` and points og:image at the personal badge,
+  // so Twitter shows the badge in the preview — but the link itself just goes to
+  // the home page when a human clicks it (not the doxxy lookup URL).
+  const token = encodeBadgeToken(plate, state);
+  const tweetUrl = `${tweetSiteUrl.replace(/\/+$/, "")}/?b=${token}`;
 
   const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     tweetText,
@@ -49,4 +66,12 @@ export function ShareButton({ copyUrl, tweetUrl, tweetText, className }: ShareBu
       </button>
     </div>
   );
+}
+
+function encodeBadgeToken(plate: string, state: string): string {
+  // base64url("STATE|PLATE") — not a security boundary, just casual obfuscation
+  // so the plate isn't immediately visible in the URL preview.
+  const raw = `${state}|${plate}`;
+  const b64 = typeof btoa === "function" ? btoa(raw) : Buffer.from(raw).toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
