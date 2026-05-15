@@ -2,7 +2,6 @@ import { ImageResponse } from "@vercel/og";
 import { Redis } from "@upstash/redis";
 import { formatNumber } from "@/lib/format";
 import { LeaderboardEntry } from "@/lib/cities/types";
-import { loadOgFonts } from "@/lib/og-fonts";
 
 export const runtime = "edge";
 
@@ -30,7 +29,6 @@ async function getTopPlate(): Promise<LeaderboardEntry | null> {
 }
 
 export async function GET() {
-  const fonts = await loadOgFonts();
   const lead = await getTopPlate();
 
   return new ImageResponse(
@@ -43,7 +41,7 @@ export async function GET() {
           flexDirection: "column",
           backgroundColor: PAPER,
           color: INK,
-          fontFamily: "Inter",
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", sans-serif',
           padding: 56,
         }}
       >
@@ -120,7 +118,6 @@ export async function GET() {
               style={{
                 display: "flex",
                 color: ACCENT,
-                fontFamily: "Serif",
                 fontStyle: "italic",
               }}
             >
@@ -186,7 +183,6 @@ export async function GET() {
     {
       width: WIDTH,
       height: HEIGHT,
-      fonts,
     },
   );
 }

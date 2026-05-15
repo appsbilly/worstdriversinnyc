@@ -7,7 +7,6 @@ import {
   normalizeState,
   ordinalRank,
 } from "@/lib/format";
-import { loadOgFonts } from "@/lib/og-fonts";
 
 export const runtime = "edge";
 
@@ -53,7 +52,6 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
 
   const cityName = city?.shortName?.toLowerCase() ?? "nyc";
-  const fonts = await loadOgFonts();
 
   // ─── headline construction ────────────────────────────────────────────────
   // The most viral framing is the rank sentence. We fall back gracefully if
@@ -94,7 +92,7 @@ export async function GET(_req: Request, { params }: Ctx) {
           flexDirection: "column",
           backgroundColor: PAPER,
           color: INK,
-          fontFamily: "Inter",
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", sans-serif',
           padding: 56,
           position: "relative",
         }}
@@ -180,7 +178,7 @@ export async function GET(_req: Request, { params }: Ctx) {
               >
                 <span>{headlineMain}</span>
                 {headlineAccent ? (
-                  <span style={{ color: ACCENT, fontFamily: "Serif", fontStyle: "italic" }}>
+                  <span style={{ color: ACCENT, fontStyle: "italic" }}>
                     {headlineAccent}
                   </span>
                 ) : null}
@@ -296,7 +294,6 @@ export async function GET(_req: Request, { params }: Ctx) {
     {
       width: WIDTH,
       height: HEIGHT,
-      fonts,
     },
   );
 }
