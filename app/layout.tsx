@@ -37,26 +37,34 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "platerank — look up any nyc plate's ticket record",
-    template: "%s · platerank",
+    default: "worstdriversinnyc — look up any nyc plate's ticket record",
+    template: "%s · worstdriversinnyc",
   },
   description:
-    "see any nyc plate's full violation history, total fines, and percentile rank against the worst drivers in the city.",
+    "look up any nyc license plate. see every ticket, every fine, and where it ranks against every other plate in the city.",
   openGraph: {
-    title: "platerank",
-    description: "look up any nyc plate's ticket record.",
+    title: "worstdriversinnyc",
+    description: "every ticket, every fine, ranked. look up any plate.",
     url: siteUrl,
-    siteName: "platerank",
+    siteName: "worstdriversinnyc",
     type: "website",
+    images: [{ url: "/api/og/site", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "platerank",
-    description: "look up any nyc plate's ticket record.",
+    title: "worstdriversinnyc",
+    description: "every ticket, every fine, ranked. look up any plate.",
+    images: ["/api/og/site"],
   },
   robots: {
     index: true,
     follow: true,
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon.svg",
   },
 };
 

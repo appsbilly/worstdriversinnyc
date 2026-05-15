@@ -86,7 +86,7 @@ export async function GET(_req: Request, { params }: Ctx) {
           }}
         >
           <div style={{ width: 14, height: 14, backgroundColor: accent }} />
-          platerank
+          worstdriversinnyc
         </div>
 
         <div
@@ -226,7 +226,7 @@ export async function GET(_req: Request, { params }: Ctx) {
           }}
         >
           <span>{cityName} open data</span>
-          <span>platerank.com</span>
+          <span>worstdriversinnyc.com</span>
         </div>
       </div>
     ),
