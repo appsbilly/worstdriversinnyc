@@ -92,24 +92,26 @@ export function PlateSearch({
     router.push(`/lookup/nyc/${s}/${p}`);
   }
 
-  const isHero = size === "hero";
-  const fieldH = isHero ? "h-14" : "h-12";
+  const heroInput = "h-14 text-lg px-4";
+  const defaultInput = "h-12 text-base px-3";
+  const inputCls =
+    "rounded-md border border-border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 uppercase tracking-wider";
 
   return (
     <form onSubmit={submit} className="w-full">
-      <div className="flex flex-col gap-0 md:flex-row md:items-stretch md:border-2 md:border-foreground/85 md:bg-background">
+      <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
         <select
           value={state}
           onChange={(e) => setState(e.target.value)}
           className={cn(
-            "border-2 border-foreground/85 md:border-0 md:border-r-2 bg-background px-3 text-[11px] uppercase tracking-[0.18em] font-medium focus:outline-none focus:bg-foreground focus:text-background md:w-28",
-            fieldH,
+            "rounded-md border border-border bg-background px-3 text-sm md:w-40",
+            size === "hero" ? "h-14" : "h-12",
           )}
           aria-label="state"
         >
           {US_STATES.map((s) => (
-            <option key={s.code} value={s.code} className="normal-case tracking-normal">
-              {s.code}
+            <option key={s.code} value={s.code}>
+              {s.code} — {s.name}
             </option>
           ))}
         </select>
@@ -121,29 +123,25 @@ export function PlateSearch({
           autoCorrect="off"
           spellCheck={false}
           maxLength={10}
-          className={cn(
-            "flex-1 mt-2 md:mt-0 border-2 border-foreground/85 md:border-0 bg-background px-4 font-mono uppercase tracking-[0.18em] placeholder:text-muted-foreground/50 focus:outline-none focus:bg-foreground/5",
-            fieldH,
-            isHero ? "text-2xl font-bold" : "text-lg font-bold",
-          )}
+          className={cn(inputCls, size === "hero" ? heroInput : defaultInput, "flex-1 font-mono font-bold")}
           aria-label="license plate"
         />
         <button
           type="submit"
           disabled={loading}
           className={cn(
-            "mt-2 md:mt-0 bg-foreground px-6 text-[11px] uppercase tracking-[0.22em] font-bold text-background transition hover:bg-accent disabled:opacity-50",
-            fieldH,
+            "rounded-md bg-foreground px-6 text-sm font-bold uppercase tracking-wider text-background transition hover:bg-accent disabled:opacity-50",
+            size === "hero" ? "h-14 text-base" : "h-12",
           )}
         >
-          {loading ? "…" : "look it up →"}
+          {loading ? "..." : "look it up"}
         </button>
       </div>
       {error ? (
-        <p className="mt-2 text-xs text-danger italic">{error}</p>
+        <p className="mt-2 text-sm text-danger">{error}</p>
       ) : (
-        <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          any state's plate · we don't store searches
+        <p className="mt-2 text-xs text-muted-foreground">
+          works for any state's plate. nyc tickets every plate it sees.
         </p>
       )}
     </form>

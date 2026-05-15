@@ -22,12 +22,6 @@ const WINDOW_LABELS: Record<LeaderboardWindow, string> = {
   "1y": "1 year",
   "all": "all time",
 };
-const WINDOW_KICKERS: Record<LeaderboardWindow, string> = {
-  "1w": "this week",
-  "1m": "this month",
-  "1y": "this year",
-  "all": "all time",
-};
 
 function parseWindow(input: string | undefined): LeaderboardWindow {
   if (input && (WINDOWS as string[]).includes(input)) return input as LeaderboardWindow;
@@ -50,18 +44,17 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
   if (!city.enabled) {
     return (
       <div className="container max-w-xl py-16">
-        <div className="eyebrow">{city.shortName}</div>
-        <h1 className="display mt-3 text-[clamp(2.5rem,7vw,5rem)]">leaderboard coming soon.</h1>
-        <p className="dek mt-4">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">
+          {city.shortName}
+        </p>
+        <h1 className="mt-2 font-serif text-4xl font-black tracking-tight">leaderboard coming soon.</h1>
+        <p className="mt-3 text-muted-foreground">
           we're working on adding {city.name}. drop your email to be notified.
         </p>
         <div className="mt-6">
           <WaitlistForm city={city.id} />
         </div>
-        <Link
-          href="/leaderboard/nyc"
-          className="mt-8 inline-block text-[11px] uppercase tracking-[0.18em] underline"
-        >
+        <Link href="/leaderboard/nyc" className="mt-8 inline-block text-sm underline">
           view the nyc leaderboard instead →
         </Link>
       </div>
@@ -72,8 +65,6 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
   let entries: Awaited<ReturnType<typeof city.getLeaderboard>> = [];
   let meta: Awaited<ReturnType<NonNullable<typeof city.getLeaderboardMeta>>> | null = null;
   try {
-    // pull the full stored set (500 per window from the refresh job) so the
-    // page can paginate client-side without re-fetching
     entries = await city.getLeaderboard(500, window);
   } catch {
     entries = [];
@@ -94,49 +85,36 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
   }
   const range =
     meta?.oldestIssueDate && meta?.newestIssueDate
-      ? `${fmtIso(meta.oldestIssueDate)} – ${fmtIso(meta.newestIssueDate)}`
+      ? `${fmtIso(meta.oldestIssueDate)} → ${fmtIso(meta.newestIssueDate)}`
       : null;
 
   return (
-    <div>
-      <section className="border-b border-foreground/15">
-        <div className="container py-10 md:py-14">
-          <div className="kicker reveal reveal-1">{city.shortName} · the leaderboard</div>
-          <h1 className="display mt-4 text-[clamp(3rem,8vw,7rem)] reveal reveal-2">
-            the worst drivers,
-            <br />
-            <span className="italic">{WINDOW_KICKERS[window]}.</span>
-          </h1>
-          <p className="dek mt-5 max-w-2xl reveal reveal-2">
-            ranked by ticket count from nyc's department of finance open-records dataset over the selected window. plates are public records.
-          </p>
-
-          <div className="mt-8 flex flex-wrap items-end justify-between gap-4 reveal reveal-3">
-            <WindowTabs
-              basePath={`/leaderboard/${city.id}`}
-              windows={WINDOWS.map((w) => ({ value: w, label: WINDOW_LABELS[w] }))}
-              active={window}
-            />
-            {range ? (
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                <span className="opacity-60">data window:</span>{" "}
-                <span className="text-foreground normal-case tracking-normal">{range}</span>
-                {meta?.rowsScanned ? (
-                  <span className="ml-3 opacity-60">· {formatNumber(meta.rowsScanned)} tickets scanned</span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="container py-10 md:py-12">
-          <div className="reveal reveal-4">
-            <Leaderboard entries={entries} city={city.id} />
-          </div>
-        </div>
-      </section>
+    <div className="container py-10 max-w-5xl">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">
+        {city.shortName} · leaderboard
+      </p>
+      <h1 className="mt-2 font-serif text-4xl font-black tracking-tight md:text-5xl">
+        the worst drivers in {city.shortName.toLowerCase()}.
+      </h1>
+      <p className="mt-2 max-w-xl text-muted-foreground">
+        ranked by ticket count from nyc's open-data feed over the selected window.
+      </p>
+      <div className="mt-6">
+        <WindowTabs
+          basePath={`/leaderboard/${city.id}`}
+          windows={WINDOWS.map((w) => ({ value: w, label: WINDOW_LABELS[w] }))}
+          active={window}
+        />
+      </div>
+      {range ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          data window: <span className="text-foreground">{range}</span>
+          {meta?.rowsScanned ? ` · ${formatNumber(meta.rowsScanned)} tickets scanned` : null}
+        </p>
+      ) : null}
+      <div className="mt-6">
+        <Leaderboard entries={entries} city={city.id} />
+      </div>
     </div>
   );
 }

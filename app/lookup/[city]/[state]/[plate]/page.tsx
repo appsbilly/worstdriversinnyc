@@ -1,7 +1,7 @@
+import { ResultCard } from "@/components/ResultCard";
 import { ShareButton } from "@/components/ShareButton";
 import { ViolationTable } from "@/components/ViolationTable";
 import { WaitlistForm } from "@/components/WaitlistForm";
-import { PlateFrame } from "@/components/PlateFrame";
 import { getCity } from "@/lib/cities";
 import {
   CityNotYetSupportedError,
@@ -18,7 +18,7 @@ import {
   normalizeState,
   ordinalRank,
 } from "@/lib/format";
-import { cn, getSiteUrl } from "@/lib/utils";
+import { getSiteUrl } from "@/lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -49,17 +49,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
     robots: { index: false, follow: false },
   };
-}
-
-function fmtDate(iso: string | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(d);
 }
 
 export default async function LookupPage({ params }: PageProps) {
@@ -102,9 +91,9 @@ export default async function LookupPage({ params }: PageProps) {
   if (err || !result) {
     return (
       <div className="container py-16 max-w-2xl">
-        <h1 className="font-serif text-4xl font-black tracking-tight">we hit a wall.</h1>
-        <p className="mt-3 text-muted-foreground italic">{err}</p>
-        <Link href="/" className="mt-6 inline-block text-xs uppercase tracking-[0.18em] underline">
+        <h1 className="font-serif text-3xl font-black tracking-tight">we hit a wall</h1>
+        <p className="mt-3 text-muted-foreground">{err}</p>
+        <Link href="/" className="mt-6 inline-block text-sm underline">
           ← back home
         </Link>
       </div>
@@ -124,187 +113,44 @@ export default async function LookupPage({ params }: PageProps) {
     shareText = `i have ${formatNumber(result.totalViolations)} tickets and ${finesStr} in fines in ${cityShort}.`;
   }
 
-  const clean = result.totalViolations === 0;
-  const rankPhrase =
-    rank && rank.total > 0
-      ? `the ${ordinalRank(rank.rank)} worst driver`
-      : clean
-        ? "a clean driver"
-        : `a ticketed driver`;
-
   return (
-    <div>
-      {/* ─── DOSSIER HEADER ─── */}
-      <section className="border-b border-foreground/15">
-        <div className="container py-8 md:py-12">
-          <div className="flex items-center gap-2 reveal reveal-1">
-            <Link href="/" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground">
-              ← back
-            </Link>
-            <span className="text-muted-foreground/40">/</span>
-            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">case file</span>
-          </div>
+    <div className="container py-10 md:py-12 max-w-5xl">
+      <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">
+        ← back
+      </Link>
 
-          <div className="mt-6 grid gap-8 md:grid-cols-12 md:gap-10">
-            <div className="md:col-span-8 reveal reveal-2">
-              <div className={cn("kicker", !clean && "kicker--accent")}>
-                {clean ? "no record" : `${city.shortName} dept. of finance · public record`}
-              </div>
-              <h1 className="display mt-4 text-[clamp(2.5rem,7vw,6rem)]">
-                plate <span className="italic">{plate}</span>
-                <br />
-                {clean ? (
-                  <span>has a <span className="text-ok">clean record.</span></span>
-                ) : (
-                  <>
-                    is <span className="text-accent">{rankPhrase}</span>
-                    <br />in {cityShort}.
-                  </>
-                )}
-              </h1>
-              <p className="dek mt-5 max-w-xl">
-                {clean ? (
-                  <>no parking or camera violations recorded in the nyc open-data feed. boring.</>
-                ) : (
-                  <>
-                    accrued {formatNumber(result.totalViolations)} violations totaling{" "}
-                    <span className="not-italic text-foreground">{formatCurrency(result.totalFinesIssued)}</span> in fines{" "}
-                    {result.firstViolationDate ? <>since {fmtDate(result.firstViolationDate)}</> : null}.
-                  </>
-                )}
-              </p>
-
-              {/* byline / metadata strip */}
-              <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 border-t hairline pt-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground md:grid-cols-4">
-                <div>
-                  <div className="opacity-60">plate</div>
-                  <div className="text-foreground font-mono tracking-[0.1em] text-sm">{plate}</div>
-                </div>
-                <div>
-                  <div className="opacity-60">state</div>
-                  <div className="text-foreground text-sm">{state}</div>
-                </div>
-                <div>
-                  <div className="opacity-60">first ticket</div>
-                  <div className="text-foreground text-sm normal-case tracking-normal">{fmtDate(result.firstViolationDate)}</div>
-                </div>
-                <div>
-                  <div className="opacity-60">last ticket</div>
-                  <div className="text-foreground text-sm normal-case tracking-normal">{fmtDate(result.lastViolationDate)}</div>
-                </div>
-              </div>
-            </div>
-
-            <aside className="md:col-span-4 md:border-l md:hairline md:pl-10 flex flex-col items-start reveal reveal-3">
-              <div className="rotate-[-1.5deg]">
-                <PlateFrame plate={plate} state={state} className="text-4xl" />
-              </div>
-              <div className="mt-6 w-full">
-                <ShareButton url={shareUrl} text={shareText} />
-              </div>
-              {result.cityPortalUrl ? (
-                <a
-                  href={result.cityPortalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
-                >
-                  pay or contest at {city.shortName} portal →
-                </a>
-              ) : null}
-            </aside>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── HERO STAT BANNER (when not clean) ─── */}
-      {!clean ? (
-        <section className="border-b border-foreground/15 bg-foreground text-background">
-          <div className="container py-10 md:py-12 reveal reveal-3">
-            <div className="grid items-end gap-8 md:grid-cols-12">
-              <div className="md:col-span-5">
-                <div className="eyebrow text-background/60">total violations</div>
-                <div className="stat-hero text-background">{formatNumber(result.totalViolations)}</div>
-              </div>
-              <div className="md:col-span-7 grid grid-cols-2 gap-x-6 gap-y-6 md:grid-cols-4 md:border-l md:border-background/15 md:pl-10">
-                <StatBlock label="paid" value={formatNumber(result.totalPaid)} dark />
-                <StatBlock label="unpaid" value={formatNumber(result.totalUnpaid)} dark accent={result.totalUnpaid > 0 ? "warn" : undefined} />
-                <StatBlock label="dismissed" value={formatNumber(result.totalDismissed)} dark />
-                <StatBlock
-                  label="outstanding"
-                  value={formatCurrency(result.totalFinesOutstanding, { compact: true })}
-                  dark
-                  accent={result.totalFinesOutstanding > 0 ? "warn" : undefined}
-                />
-              </div>
-            </div>
-            {rank && rank.total > 0 ? (
-              <p className="mt-8 text-[11px] uppercase tracking-[0.2em] text-background/50">
-                ranked <span className="text-background">#{formatNumber(rank.rank)}</span> of{" "}
-                <span className="text-background">{formatNumber(rank.total)}</span> {cityShort} drivers indexed · lower rank = worse
-              </p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {/* ─── DISCLAIMER ─── */}
-      <section className="border-b border-foreground/15">
-        <div className="container py-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            this record describes the vehicle, not the current owner. plates change hands; the record does not.
-          </p>
-        </div>
-      </section>
-
-      {/* ─── EVIDENCE / VIOLATIONS ─── */}
-      <section>
-        <div className="container py-10 md:py-14">
-          <div className="kicker">the evidence</div>
-          <h2 className="display mt-3 text-[clamp(1.75rem,4vw,3rem)]">
-            every ticket on file.
-          </h2>
-          <p className="dek mt-2">
-            sortable by date, type, location, and status. source: nyc dof open parking & camera violations dataset.
-          </p>
-          <div className="mt-6">
-            {result.violations.length === 0 ? (
-              <div className="border-t-2 border-b border-foreground/85 py-16 text-center">
-                <p className="font-serif text-3xl italic text-muted-foreground">no violations on file.</p>
-                <p className="mt-2 text-sm text-muted-foreground">a boring, beautiful thing.</p>
-              </div>
-            ) : (
-              <ViolationTable violations={result.violations} />
-            )}
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function StatBlock({
-  label,
-  value,
-  dark,
-  accent,
-}: {
-  label: string;
-  value: string;
-  dark?: boolean;
-  accent?: "warn" | "danger" | "ok";
-}) {
-  const accentCls =
-    accent === "danger" ? "text-danger" :
-    accent === "warn"   ? "text-accent" :
-    accent === "ok"     ? "text-ok" :
-                          dark ? "text-background" : "text-foreground";
-  return (
-    <div>
-      <div className={cn("eyebrow", dark && "text-background/60")}>{label}</div>
-      <div className={cn("font-serif text-3xl md:text-4xl font-bold tabular leading-none mt-2", accentCls)}>
-        {value}
+      <div className="mt-4">
+        <ResultCard result={result} rank={rank} cityShortName={cityShort} />
       </div>
+
+      <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <ShareButton url={shareUrl} text={shareText} />
+        {result.cityPortalUrl ? (
+          <a
+            href={result.cityPortalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm underline decoration-muted-foreground underline-offset-4 hover:text-foreground"
+          >
+            pay or contest at the official {city.shortName} portal →
+          </a>
+        ) : null}
+      </div>
+
+      <p className="mt-4 rounded-md border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+        this data reflects the vehicle, not the current owner. plates change hands; this record does not follow people.
+      </p>
+
+      <section className="mt-10">
+        <h2 className="mb-3 font-serif text-2xl font-black tracking-tight">violations</h2>
+        {result.violations.length === 0 ? (
+          <div className="rounded-xl border border-border p-8 text-center text-muted-foreground">
+            clean record. boring.
+          </div>
+        ) : (
+          <ViolationTable violations={result.violations} />
+        )}
+      </section>
     </div>
   );
 }
@@ -316,19 +162,21 @@ function ComingSoonState({
 }) {
   return (
     <div className="container max-w-xl py-16">
-      <div className="eyebrow">{city.shortName}</div>
-      <h1 className="display mt-3 text-[clamp(2.5rem,7vw,5rem)]">coming soon.</h1>
-      <p className="dek mt-4">
-        nyc is live. {city.name} is next. drop your email and we'll let you know.
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">
+        {city.shortName}
+      </p>
+      <h1 className="mt-2 font-serif text-4xl font-black tracking-tight">coming soon.</h1>
+      <p className="mt-3 text-muted-foreground">
+        nyc is live. {city.name} is next. drop your email and we'll let you know the moment lookups go live.
       </p>
       <div className="mt-6">
         <WaitlistForm city={city.id} />
       </div>
       <Link
         href="/lookup/nyc/NY/GBV6536"
-        className="mt-8 inline-block text-[11px] uppercase tracking-[0.18em] underline"
+        className="mt-8 inline-block text-sm underline"
       >
-        try a live nyc plate →
+        try a live nyc plate instead →
       </Link>
     </div>
   );
@@ -337,16 +185,11 @@ function ComingSoonState({
 function InvalidState({ plate, state }: { plate: string; state: string }) {
   return (
     <div className="container max-w-xl py-16">
-      <h1 className="display text-[clamp(2.5rem,7vw,5rem)]">
-        that doesn't look like a plate.
-      </h1>
-      <p className="dek mt-4">
+      <h1 className="font-serif text-3xl font-black tracking-tight">that doesn't look like a plate.</h1>
+      <p className="mt-3 text-muted-foreground">
         "{plate}" / "{state}" isn't valid. plates are 2–10 letters/numbers, state is two letters.
       </p>
-      <Link
-        href="/"
-        className="mt-8 inline-block text-[11px] uppercase tracking-[0.18em] underline"
-      >
+      <Link href="/" className="mt-6 inline-block text-sm underline">
         ← back home
       </Link>
     </div>
