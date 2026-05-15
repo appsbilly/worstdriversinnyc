@@ -25,6 +25,18 @@ jobs:
 
       - run: npm ci
 
+      # Restore the accumulated plate-state file from a previous run.
+      # If this is the very first run, the cache miss is expected and the
+      # script bootstraps from scratch.
+      - name: Restore plate state
+        id: restore-state
+        uses: actions/cache/restore@v4
+        with:
+          path: ./state.json.gz
+          key: nyc-plate-state-${{ github.run_id }}
+          restore-keys: |
+            nyc-plate-state-
+
       - name: Refresh leaderboard in Redis
         env:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
@@ -32,3 +44,13 @@ jobs:
           NYC_OPEN_DATA_APP_TOKEN: ${{ secrets.NYC_OPEN_DATA_APP_TOKEN }}
           ROWS_TARGET: ${{ github.event.inputs.rows_target || '80000000' }}
         run: npm run refresh-leaderboard
+
+      # Always save the updated state, even if a downstream step failed —
+      # the script writes state.json.gz at the end of a successful scan, and
+      # we want subsequent runs to pick up that progress.
+      - name: Save plate state
+        if: always() && hashFiles('./state.json.gz') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ./state.json.gz
+          key: nyc-plate-state-${{ github.run_id }}

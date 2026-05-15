@@ -1,21 +1,36 @@
 /**
- * Refresh NYC plate leaderboards + percentile buckets in Upstash Redis.
+ * Refresh NYC plate leaderboards + percentile buckets + rank histogram in Upstash Redis.
  *
- * One pass through the SODA dataset using :id-based keyset pagination
- * (fast at any depth — doesn't slow down like $offset does). Computes four
- * time-windowed leaderboards (1w / 1m / 1y / all) and writes them to Redis
- * along with date-range metadata so the UI can show "data from <date> to <date>".
+ * One pass through the SODA dataset using :id-based keyset pagination (fast at any
+ * depth — doesn't slow down like $offset does). Computes four time-windowed
+ * leaderboards (1w / 1m / 1y / all) AND maintains an incremental per-plate state
+ * across runs so the rank histogram only grows monotonically.
+ *
+ * The state file (`./state.json.gz` — cached by the GitHub Actions cache action)
+ * holds:
+ *   { lastProcessedId: string, plates: { "<state>|<plate>": [count, fines] } }
+ *
+ * Each refresh:
+ *   1. loads state from the cache
+ *   2. scans SODA in :id DESC, building windowed leaderboards in memory
+ *      AND adding rows with :id > lastProcessedId to the plate state
+ *   3. computes histogram, fine quantiles, percentiles from the FULL accumulated state
+ *   4. writes Redis keys (only on completion)
+ *   5. saves state.json.gz for the next run to pick up
+ *
+ * Result: the "of N drivers" denominator is stable across runs and only grows.
  *
  * env vars:
  *   UPSTASH_REDIS_REST_URL       (required)
  *   UPSTASH_REDIS_REST_TOKEN     (required)
  *   NYC_OPEN_DATA_APP_TOKEN      (optional but recommended)
- *   ROWS_TARGET                  (optional — default 80,000,000 ≈ as much as the
- *                                 dataset has; script stops at end-of-data or kill)
- *   FLUSH_EVERY_PAGES            (optional — default 100, write to redis every N pages
- *                                 so progress isn't lost if the runner is killed)
+ *   ROWS_TARGET                  (optional — default 80,000,000)
+ *   FLUSH_EVERY_PAGES            (optional — default 100)
+ *   STATE_FILE                   (optional — default ./state.json.gz)
  */
 import { Redis } from "@upstash/redis";
+import { gzipSync, gunzipSync } from "node:zlib";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const SODA_BASE = "https://data.cityofnewyork.us/resource/nc67-uf89.json";
 const PAGE_SIZE = 50_000;
@@ -24,6 +39,7 @@ const FLUSH_EVERY_PAGES = Number(process.env.FLUSH_EVERY_PAGES || 100);
 const APP_TOKEN = process.env.NYC_OPEN_DATA_APP_TOKEN;
 const PAGE_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 5;
+const STATE_FILE = process.env.STATE_FILE || "./state.json.gz";
 
 type Window = "1w" | "1m" | "1y" | "all";
 const WINDOWS: Window[] = ["1w", "1m", "1y", "all"];
@@ -36,13 +52,16 @@ type Row = {
   issue_date?: string;
 };
 type Bucket = { plate: string; state: string; count: number; fines: number };
+/** Compact per-plate state: [count, fines]. */
+type PlateRow = [number, number];
+
+interface PersistedState {
+  lastProcessedId: string | null;
+  plates: Record<string, PlateRow>;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Acceptable date range for an NYC ticket: from 2010-01-01 through ~30 days in
-// the future. SODA records occasionally have data-entry typos (e.g. year 2096
-// instead of 2026); clamping ensures those don't blow up the "data window"
-// display or land in the wrong time-window bucket.
 const MIN_TS = Date.parse("2010-01-01T00:00:00Z");
 const MAX_TS = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
@@ -57,6 +76,13 @@ function parseSodaDate(input: string | undefined): number {
 function toIsoDay(ms: number): string {
   if (!ms) return "";
   return new Date(ms).toISOString().slice(0, 10);
+}
+
+function isJunkPlate(plate: string, state: string): boolean {
+  const p = plate.toUpperCase();
+  if (p === "BLANK" || p === "BLANKPLATE" || p === "NONE" || p === "UNKNOWN" || p === "NOPLATE") return true;
+  if (state === "99" || state === "XX") return true;
+  return false;
 }
 
 async function fetchPage(cursor: string | null): Promise<Row[]> {
@@ -107,11 +133,29 @@ function percentile(sortedAsc: number[], p: number): number {
   return sortedAsc[idx]!;
 }
 
-function isJunkPlate(plate: string, state: string): boolean {
-  const p = plate.toUpperCase();
-  if (p === "BLANK" || p === "BLANKPLATE" || p === "NONE" || p === "UNKNOWN" || p === "NOPLATE") return true;
-  if (state === "99" || state === "XX") return true;
-  return false;
+function loadState(): PersistedState {
+  if (!existsSync(STATE_FILE)) {
+    console.log(`no existing state at ${STATE_FILE} — bootstrapping from scratch`);
+    return { lastProcessedId: null, plates: {} };
+  }
+  try {
+    const buf = readFileSync(STATE_FILE);
+    const json = gunzipSync(buf).toString("utf8");
+    const parsed = JSON.parse(json) as PersistedState;
+    const count = Object.keys(parsed.plates ?? {}).length;
+    console.log(`loaded state: ${count.toLocaleString()} plates, cursor=${parsed.lastProcessedId ?? "(none)"}`);
+    return parsed;
+  } catch (err) {
+    console.warn(`failed to read state, bootstrapping:`, err instanceof Error ? err.message : err);
+    return { lastProcessedId: null, plates: {} };
+  }
+}
+
+function saveState(state: PersistedState): void {
+  const json = JSON.stringify(state);
+  const gz = gzipSync(Buffer.from(json, "utf8"), { level: 6 });
+  writeFileSync(STATE_FILE, gz);
+  console.log(`saved state: ${Object.keys(state.plates).length.toLocaleString()} plates, ${(gz.byteLength / 1024 / 1024).toFixed(1)} MB gzipped`);
 }
 
 interface Meta {
@@ -127,15 +171,14 @@ async function writeWindows(
   redis: Redis,
   aggs: Record<Window, Map<string, Bucket>>,
   ranges: Record<Window, { min: number; max: number }>,
+  state: PersistedState,
   totalRows: number,
   ttlSeconds: number,
   isFinal: boolean,
 ) {
+  // Always flush windowed leaderboards so the page has fresh recent data
+  // during a long-running refresh.
   for (const w of WINDOWS) {
-    // Sort by ticket count desc, then total fines desc as the tiebreaker
-    // (a plate with $300 in fines outranks one with $100 at the same ticket
-    // count). plate code is the final deterministic tiebreaker so runs are
-    // reproducible.
     const sorted = [...aggs[w].values()].sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
       if (b.fines !== a.fines) return b.fines - a.fines;
@@ -159,60 +202,33 @@ async function writeWindows(
     await redis.set(`leaderboard:nyc:${w}`, leaderboard, { ex: ttlSeconds });
     await redis.set(`leaderboard:nyc:${w}:meta`, meta, { ex: ttlSeconds });
   }
-  // legacy key for fallback compatibility
   const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
   if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: ttlSeconds });
 
-  // Rank-related data structures (histogram, fine quantiles, percentile buckets)
-  // are ONLY written on the final flush of a run. During incremental flushes the
-  // partial dataset would have an artificially small denominator (fewer unique
-  // plates indexed so far) and would make the rank badge fluctuate wildly while
-  // a refresh is in progress. By only writing on completion we keep the badge
-  // stable on the previous run's numbers until the new run finishes.
+  // Rank-related artefacts derive from the FULL accumulated state, so they're
+  // stable across runs. Only write them on the final flush to avoid partial
+  // states leaking out mid-refresh.
   if (!isFinal) return;
 
-  // percentile buckets from the broadest (all) window
-  const allCounts = [...aggs.all.values()].map((b) => b.count).sort((a, b) => a - b);
-  const percentiles = {
-    city: "nyc",
-    computedAt: new Date().toISOString(),
-    totalPlatesObserved: allCounts.length,
-    buckets: {
-      p50: Math.max(2, percentile(allCounts, 50)),
-      p75: Math.max(3, percentile(allCounts, 75)),
-      p90: Math.max(5, percentile(allCounts, 90)),
-      p95: Math.max(10, percentile(allCounts, 95)),
-      p99: Math.max(25, percentile(allCounts, 99)),
-    },
-  };
-  await redis.set("percentiles:nyc", percentiles, { ex: ttlSeconds });
+  const plateEntries = Object.values(state.plates);
 
-  // Rank histogram — count of plates at each violation-count value, across the
-  // full (all-time) distribution. Lets us compute competition-style rank:
-  //   rank(c) = 1 + sum of plates with count > c
-  // Ties get the same rank, next distinct count skips by the tie-group size.
+  // Histogram of plate-count -> # plates at that count
   const histogram: Record<string, number> = {};
-  for (const c of allCounts) {
-    const k = String(c);
+  for (const [count] of plateEntries) {
+    const k = String(count);
     histogram[k] = (histogram[k] || 0) + 1;
   }
   await redis.set("rank_histogram:nyc", histogram, { ex: ttlSeconds });
 
-  // Per-count fine quantiles — used to break rank ties on total fines.
-  // For each unique ticket count, we record 21 breakpoints (p0, p5, p10, …, p100)
-  // of the fine distribution at that count. Lookup binary-searches into these
-  // breakpoints to estimate the plate's within-tie-group position by fines.
-  //
-  // Approximate, but precision is 5% of tie-group size (one in 20 sub-buckets).
-  // Storage ~5000 unique counts × 21 numbers × ~8 bytes ≈ 800KB JSON; ~100KB gzip.
+  // Per-count fine quantiles for tie-breaking by total fines
   const finesByCount = new Map<number, number[]>();
-  for (const b of aggs.all.values()) {
-    let arr = finesByCount.get(b.count);
+  for (const [count, fines] of plateEntries) {
+    let arr = finesByCount.get(count);
     if (!arr) {
       arr = [];
-      finesByCount.set(b.count, arr);
+      finesByCount.set(count, arr);
     }
-    arr.push(b.fines);
+    arr.push(fines);
   }
   const fineQuantiles: Record<string, number[]> = {};
   for (const [count, arr] of finesByCount) {
@@ -226,6 +242,22 @@ async function writeWindows(
     fineQuantiles[String(count)] = breaks;
   }
   await redis.set("rank_fine_quantiles:nyc", fineQuantiles, { ex: ttlSeconds });
+
+  // Percentile buckets across the full population
+  const allCounts = plateEntries.map(([c]) => c).sort((a, b) => a - b);
+  const percentiles = {
+    city: "nyc",
+    computedAt: new Date().toISOString(),
+    totalPlatesObserved: allCounts.length,
+    buckets: {
+      p50: Math.max(2, percentile(allCounts, 50)),
+      p75: Math.max(3, percentile(allCounts, 75)),
+      p90: Math.max(5, percentile(allCounts, 90)),
+      p95: Math.max(10, percentile(allCounts, 95)),
+      p99: Math.max(25, percentile(allCounts, 99)),
+    },
+  };
+  await redis.set("percentiles:nyc", percentiles, { ex: ttlSeconds });
 }
 
 async function main() {
@@ -247,6 +279,7 @@ async function main() {
     "all": 0,
   };
 
+  // Windowed aggregators — rebuilt fresh every refresh, transient.
   const aggs: Record<Window, Map<string, Bucket>> = {
     "1w": new Map(),
     "1m": new Map(),
@@ -260,11 +293,17 @@ async function main() {
     "all": { min: Infinity, max: 0 },
   };
 
+  // Persisted state — accumulates across refreshes.
+  const state = loadState();
+  const previousCursor = state.lastProcessedId;
+  let highestIdSeen: string | null = null;
+  let newPlatesAdded = 0;
+  let newTicketsApplied = 0;
+
   console.log(`refresh-leaderboard: target=${ROWS_TARGET.toLocaleString()} rows, page=${PAGE_SIZE.toLocaleString()}, keyset pagination via :id`);
   if (APP_TOKEN) console.log("using NYC_OPEN_DATA_APP_TOKEN");
-  console.log(`flush to redis every ${FLUSH_EVERY_PAGES} pages`);
+  console.log(`flush leaderboards every ${FLUSH_EVERY_PAGES} pages; rank artefacts on final flush only`);
 
-  // ttl is long because partial writes happen throughout; we want them to stick
   const TTL = 60 * 60 * 48;
 
   let totalRows = 0;
@@ -281,12 +320,21 @@ async function main() {
     }
     let pageMinDate = Infinity;
     let pageMaxDate = 0;
+
+    // Track highest :id from very first page (since order is DESC).
+    if (highestIdSeen === null && rows.length > 0) {
+      highestIdSeen = rows[0][":id"] ?? null;
+    }
+
     for (const r of rows) {
       if (!r.plate || !r.state) continue;
       if (isJunkPlate(r.plate, r.state)) continue;
       const key = `${r.state}|${r.plate}`;
       const fine = Number(r.fine_amount) || 0;
       const issuedAt = parseSodaDate(r.issue_date);
+      const rowId = r[":id"];
+
+      // Windowed aggregator (transient, rebuilt each refresh).
       if (issuedAt > 0) {
         if (issuedAt < pageMinDate) pageMinDate = issuedAt;
         if (issuedAt > pageMaxDate) pageMaxDate = issuedAt;
@@ -307,7 +355,23 @@ async function main() {
           }
         }
       }
+
+      // Persisted state — only add tickets we haven't seen before.
+      // Since we scan in :id DESC, anything with :id > previousCursor is new.
+      // If previousCursor is null (bootstrap), all rows are new.
+      if (rowId && (previousCursor === null || rowId > previousCursor)) {
+        const existing = state.plates[key];
+        if (existing) {
+          existing[0] += 1;
+          existing[1] = Math.round((existing[1] + fine) * 100) / 100;
+        } else {
+          state.plates[key] = [1, Math.round(fine * 100) / 100];
+          newPlatesAdded += 1;
+        }
+        newTicketsApplied += 1;
+      }
     }
+
     totalRows += rows.length;
     pageIndex += 1;
     cursor = rows[rows.length - 1]?.[":id"] ?? null;
@@ -319,34 +383,49 @@ async function main() {
     const pageOldest = pageMinDate === Infinity ? "—" : toIsoDay(pageMinDate);
     const pageNewest = pageMaxDate === 0 ? "—" : toIsoDay(pageMaxDate);
     console.log(
-      `p${pageIndex}: +${rows.length.toLocaleString()} in ${pageMs}ms  total=${totalRows.toLocaleString()}  all-plates=${aggs.all.size.toLocaleString()}  page-dates=${pageOldest}→${pageNewest}  elapsed=${elapsedS}s`,
+      `p${pageIndex}: +${rows.length.toLocaleString()} in ${pageMs}ms  total=${totalRows.toLocaleString()}  state-plates=${Object.keys(state.plates).length.toLocaleString()}  +new-tickets=${newTicketsApplied.toLocaleString()}  page-dates=${pageOldest}→${pageNewest}  elapsed=${elapsedS}s`,
     );
     if (rows.length < PAGE_SIZE) {
       console.log("partial page — end of dataset.");
       break;
     }
+
+    // Stop scanning once we've gone deeper than the previous cursor — we've
+    // caught up on all new tickets and don't need to re-scan older history.
+    // (Only applies after the first run when previousCursor is set.)
+    if (previousCursor !== null && cursor && cursor <= previousCursor && newTicketsApplied > 0) {
+      console.log(`caught up: cursor=${cursor} reached previousCursor=${previousCursor}. stopping incremental scan.`);
+      break;
+    }
+
     if (pageIndex % FLUSH_EVERY_PAGES === 0) {
       const flushStart = Date.now();
-      await writeWindows(redis, aggs, ranges, totalRows, TTL, /* isFinal */ false);
+      await writeWindows(redis, aggs, ranges, state, totalRows, TTL, /* isFinal */ false);
       console.log(`  ↳ flushed leaderboards to redis (${Date.now() - flushStart}ms)`);
     }
   }
 
-  // Final flush — leaderboards + rank histogram + fine quantiles + percentiles.
-  // Rank-related keys are only written here so the badge stays stable on the
-  // previous run's data throughout an in-progress refresh.
-  await writeWindows(redis, aggs, ranges, totalRows, TTL, /* isFinal */ true);
+  // Advance the cursor only after a successful scan
+  if (highestIdSeen) state.lastProcessedId = highestIdSeen;
+
+  // Final flush: leaderboards + rank histogram + fine quantiles + percentiles
+  await writeWindows(redis, aggs, ranges, state, totalRows, TTL, /* isFinal */ true);
+
+  // Save updated state for the next run
+  saveState(state);
 
   const elapsedS = Math.round((Date.now() - startedAt) / 1000);
-  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned.`);
+  const totalPlates = Object.keys(state.plates).length;
+  console.log(`\ndone in ${elapsedS}s. ${totalRows.toLocaleString()} rows scanned this run, ${newTicketsApplied.toLocaleString()} new tickets applied, ${newPlatesAdded.toLocaleString()} new plates added.`);
+  console.log(`accumulated state: ${totalPlates.toLocaleString()} unique plates total.`);
   for (const w of WINDOWS) {
     const oldest = ranges[w].min === Infinity ? "—" : toIsoDay(ranges[w].min);
     const newest = ranges[w].max === 0 ? "—" : toIsoDay(ranges[w].max);
-    console.log(`  ${w}: ${aggs[w].size.toLocaleString()} unique plates, dates ${oldest} → ${newest}`);
+    console.log(`  ${w}: ${aggs[w].size.toLocaleString()} plates this scan, dates ${oldest} → ${newest}`);
   }
 }
 
-main().catch(async (err) => {
+main().catch((err) => {
   console.error("fatal:", err);
   process.exit(1);
 });
