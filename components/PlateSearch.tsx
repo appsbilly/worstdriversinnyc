@@ -92,10 +92,12 @@ export function PlateSearch({
     router.push(`/lookup/nyc/${s}/${p}`);
   }
 
-  const heroInput = "h-14 text-lg px-4";
-  const defaultInput = "h-12 text-base px-3";
+  // Plate input gets bigger type than other fields — it should look like a plate
+  // when you type into it. State select and button stay at the same height but
+  // use restrained UI-text sizes so the plate feels like the focal point.
+  const fieldHeight = size === "hero" ? "h-16" : "h-12";
   const inputCls =
-    "rounded-md border border-border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 uppercase tracking-wider";
+    "rounded-md border border-border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 uppercase";
 
   return (
     <form onSubmit={submit} className="w-full">
@@ -105,7 +107,7 @@ export function PlateSearch({
           onChange={(e) => setState(e.target.value)}
           className={cn(
             "rounded-md border border-border bg-background px-3 text-sm md:w-40",
-            size === "hero" ? "h-14" : "h-12",
+            fieldHeight,
           )}
           aria-label="state"
         >
@@ -123,7 +125,12 @@ export function PlateSearch({
           autoCorrect="off"
           spellCheck={false}
           maxLength={10}
-          className={cn(inputCls, size === "hero" ? heroInput : defaultInput, "flex-1 font-mono font-bold")}
+          className={cn(
+            inputCls,
+            fieldHeight,
+            "flex-1 font-mono font-black tracking-[0.18em] px-4",
+            size === "hero" ? "text-3xl" : "text-xl",
+          )}
           aria-label="license plate"
         />
         <button
@@ -131,7 +138,7 @@ export function PlateSearch({
           disabled={loading}
           className={cn(
             "rounded-md bg-foreground px-6 text-sm font-bold uppercase tracking-wider text-background transition hover:bg-accent disabled:opacity-50",
-            size === "hero" ? "h-14 text-base" : "h-12",
+            fieldHeight,
           )}
         >
           {loading ? "..." : "look it up"}
