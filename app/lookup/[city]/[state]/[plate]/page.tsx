@@ -101,9 +101,13 @@ export default async function LookupPage({ params }: PageProps) {
   }
 
   const siteUrl = getSiteUrl();
-  // Tweet uses the lookup URL so the plate's OG card (rank badge image) surfaces
-  // in the tweet preview. The image already tells the story; the prose echoes it.
+  // Two different URLs intentionally:
+  //  - copyUrl: the specific lookup. user is intentionally sharing the record.
+  //  - tweetUrl: the bare site domain. broadcasting the lookup URL would publish
+  //    the plate to anyone who saw the tweet — doxxy. So the tweet links to the
+  //    home page; the prose says the rank but the URL doesn't leak the plate.
   const shareUrl = `${siteUrl}/lookup/${city.id}/${state}/${plate}`;
+  const tweetUrl = siteUrl.replace(/\/+$/, "");
   const cityShort = city.shortName.toLowerCase();
   const finesStr = formatCurrency(result.totalFinesIssued, { compact: true });
   let tweetText: string;
@@ -126,7 +130,7 @@ export default async function LookupPage({ params }: PageProps) {
       </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <ShareButton copyUrl={shareUrl} tweetText={tweetText} />
+        <ShareButton copyUrl={shareUrl} tweetUrl={tweetUrl} tweetText={tweetText} />
         {result.cityPortalUrl ? (
           <a
             href={result.cityPortalUrl}

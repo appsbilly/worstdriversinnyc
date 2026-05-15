@@ -4,19 +4,21 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface ShareButtonProps {
-  /** Specific URL used by both buttons. Tweet uses it so the OG card surfaces. */
+  /** URL the "copy link" action puts on the clipboard. Typically the specific lookup URL. */
   copyUrl: string;
-  /** Pre-composed tweet text. Twitter appends the URL automatically. */
+  /** URL Twitter attaches to the tweet. Use the bare site domain to avoid doxxing the looked-up plate. */
+  tweetUrl: string;
+  /** Pre-composed tweet text. */
   tweetText: string;
   className?: string;
 }
 
-export function ShareButton({ copyUrl, tweetText, className }: ShareButtonProps) {
+export function ShareButton({ copyUrl, tweetUrl, tweetText, className }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const tweetIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     tweetText,
-  )}&url=${encodeURIComponent(copyUrl)}`;
+  )}&url=${encodeURIComponent(tweetUrl)}`;
 
   async function copy() {
     try {
