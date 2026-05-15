@@ -77,7 +77,7 @@ export function Leaderboard({
                 <td className={cn(
                   "px-4 py-2 tabular font-semibold",
                   e.rank === 1 && "text-accent",
-                  e.rank > 1 && e.rank <= 3 && "text-accent/80",
+                  e.rank > 1 && e.rank <= 3 && "text-accent/70",
                 )}>
                   {e.rank}
                 </td>
@@ -97,7 +97,8 @@ export function Leaderboard({
                 <td
                   className={cn(
                     "px-4 py-2 text-right tabular font-semibold",
-                    e.violationCount > 80 && "text-accent",
+                    e.rank === 1 && "text-accent",
+                    e.rank > 1 && e.rank <= 3 && "text-accent/70",
                   )}
                 >
                   {formatNumber(e.violationCount)}
