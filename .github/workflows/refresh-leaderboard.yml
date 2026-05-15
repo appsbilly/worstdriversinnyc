@@ -2,8 +2,10 @@ name: Refresh leaderboard
 
 on:
   schedule:
-    # 08:00 UTC daily ≈ 4am ET
-    - cron: "0 8 * * *"
+    # 04:00 UTC daily ≈ midnight EDT / 11pm EST.
+    # Picked so a worst-case 5h bootstrap run still finishes before nyc wakes up,
+    # and daily incremental runs (~5 min) are well clear of morning traffic.
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       rows_target:
