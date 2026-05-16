@@ -3,6 +3,8 @@ import "./globals.css";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/utils";
 import { Fraunces, Instrument_Sans, JetBrains_Mono, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const serif = Fraunces({
   subsets: ["latin"],
@@ -94,6 +96,8 @@ export default function RootLayout({
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

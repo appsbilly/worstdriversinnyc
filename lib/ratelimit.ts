@@ -28,13 +28,19 @@ export async function rateLimit(identifier: string): Promise<RateLimitResult> {
   if (!limiter) {
     return { success: true, limit: 10, remaining: 10, reset: Date.now() + 60_000 };
   }
-  const res = await limiter.limit(identifier);
-  return {
-    success: res.success,
-    limit: res.limit,
-    remaining: res.remaining,
-    reset: res.reset,
-  };
+  try {
+    const res = await limiter.limit(identifier);
+    return {
+      success: res.success,
+      limit: res.limit,
+      remaining: res.remaining,
+      reset: res.reset,
+    };
+  } catch {
+    // If Upstash is down or hits a quota, fail OPEN so the site stays usable.
+    // Better to serve a few too many requests than to 500 the lookup page.
+    return { success: true, limit: 10, remaining: 10, reset: Date.now() + 60_000 };
+  }
 }
 
 export function getClientIp(headers: Headers): string {
