@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Check, Share2 } from "lucide-react";
+import { Check, ChevronDown, Share2 } from "lucide-react";
 import { PlateLookupResult, RankInfo, Violation } from "@/lib/cities/types";
 import { ResultCard } from "./ResultCard";
 import { ViolationTable } from "./ViolationTable";
@@ -46,6 +46,7 @@ export function LookupResultView({
 }: LookupResultViewProps) {
   const [preset, setPreset] = useState<string>("all");
   const [customSince, setCustomSince] = useState<string>("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [shareState, setShareState] = useState<"idle" | "shared">("idle");
@@ -180,72 +181,6 @@ export function LookupResultView({
 
   return (
     <div>
-      {/* filter controls */}
-      <div className="mb-4">
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 md:flex-row md:items-center md:justify-between md:p-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
-            <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              showing tickets from
-            </span>
-            <div className="flex flex-wrap gap-1">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => {
-                    setPreset(p.value);
-                    setCustomSince("");
-                  }}
-                  className={cn(
-                    "rounded-md px-2.5 py-1.5 text-xs uppercase tracking-wider transition",
-                    preset === p.value && !customSince
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="uppercase tracking-wider">since:</span>
-            <input
-              type="date"
-              value={customSince}
-              onChange={(e) => {
-                setCustomSince(e.target.value);
-                setPreset("custom");
-              }}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40"
-            />
-            {customSince ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomSince("");
-                  setPreset("all");
-                }}
-                className="text-[10px] uppercase tracking-wider hover:text-foreground"
-              >
-                clear
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {filtered.isFiltered ? (
-          <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            showing only tickets since <span className="text-foreground tracking-normal normal-case">{filtered.sinceLabel}</span>
-            {" · "}
-            <span className="text-foreground tabular tracking-normal normal-case">
-              {formatNumber(filtered.result.totalViolations)}
-            </span>{" "}
-            of {formatNumber(result.totalViolations)} total{" "}
-            <span className="italic">· rank is an estimate</span>
-          </p>
-        ) : null}
-      </div>
-
       <div ref={cardRef}>
         <ResultCard
           result={filtered.result}
@@ -317,13 +252,103 @@ export function LookupResultView({
           </ul>
           <p className="mt-2 text-muted-foreground">
             violations before the most recent signal may belong to a previous owner. use the date
-            filter above to view tickets since you owned the plate.
+            filter below to view tickets since you owned the plate.
           </p>
         </div>
       ) : null}
 
       <section className="mt-10">
-        <h2 className="mb-3 font-serif text-2xl font-black tracking-tight">violations</h2>
+        <div className="mb-3 flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="font-serif text-2xl font-black tracking-tight">violations</h2>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition",
+              filtered.isFiltered
+                ? "border-accent/40 bg-accent/5 text-accent"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-expanded={filterOpen}
+          >
+            {filtered.isFiltered ? (
+              <>since {filtered.sinceLabel}</>
+            ) : (
+              <>filter by date</>
+            )}
+            <ChevronDown
+              size={12}
+              strokeWidth={2.5}
+              className={cn("transition-transform", filterOpen && "rotate-180")}
+            />
+          </button>
+        </div>
+
+        {filterOpen ? (
+          <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3 md:p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                  showing tickets from
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => {
+                        setPreset(p.value);
+                        setCustomSince("");
+                      }}
+                      className={cn(
+                        "rounded-md px-2.5 py-1.5 text-xs uppercase tracking-wider transition",
+                        preset === p.value && !customSince
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="uppercase tracking-wider">since:</span>
+                <input
+                  type="date"
+                  value={customSince}
+                  onChange={(e) => {
+                    setCustomSince(e.target.value);
+                    setPreset("custom");
+                  }}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+                {customSince ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomSince("");
+                      setPreset("all");
+                    }}
+                    className="text-[10px] uppercase tracking-wider hover:text-foreground"
+                  >
+                    clear
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {filtered.isFiltered ? (
+              <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                <span className="text-foreground tabular tracking-normal normal-case">
+                  {formatNumber(filtered.result.totalViolations)}
+                </span>{" "}
+                of {formatNumber(result.totalViolations)} tickets · the rank above is an{" "}
+                <span className="italic">estimate</span> based on this window
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {filtered.result.violations.length === 0 ? (
           <div className="rounded-xl border border-border p-8 text-center text-muted-foreground">
             {filtered.isFiltered ? "no violations in this window." : "clean record. boring."}
