@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Check, Share2 } from "lucide-react";
 import { PlateLookupResult, RankInfo, Violation } from "@/lib/cities/types";
 import { ResultCard } from "./ResultCard";
 import { ViolationTable } from "./ViolationTable";
@@ -47,6 +48,33 @@ export function LookupResultView({
   const [customSince, setCustomSince] = useState<string>("");
   const cardRef = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [shareState, setShareState] = useState<"idle" | "shared">("idle");
+
+  /**
+   * Mobile → opens the native OS share sheet (text/iMessage/email/etc).
+   * Desktop or unsupported → copies the lookup URL to clipboard.
+   */
+  async function handleShare() {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "worstdriversinnyc",
+          text: tweetText,
+          url: shareUrl,
+        });
+      } catch {
+        // user cancelled or share failed — silent
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareState("shared");
+      setTimeout(() => setShareState("idle"), 1500);
+    } catch {
+      // silent
+    }
+  }
 
   /**
    * Capture the result card as a PNG and copy it to the clipboard so the user
@@ -227,9 +255,8 @@ export function LookupResultView({
       </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ShareButton
-            copyUrl={shareUrl}
             tweetSiteUrl={tweetSiteUrl}
             plate={plate}
             state={state}
@@ -245,6 +272,19 @@ export function LookupResultView({
              saveState === "saved" ? "copied!" :
              saveState === "error" ? "try again" :
              "copy image"}
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label="share"
+            title="share"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border hover:bg-muted transition-colors"
+          >
+            {shareState === "shared" ? (
+              <Check size={16} strokeWidth={2.25} className="text-ok" />
+            ) : (
+              <Share2 size={16} strokeWidth={2} />
+            )}
           </button>
         </div>
         {cityPortalUrl ? (
