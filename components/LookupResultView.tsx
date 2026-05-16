@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 interface LookupResultViewProps {
   result: PlateLookupResult;
   rank: RankInfo | null;
-  histogram: Record<string, number> | null;
   cityShortName: string;
   cityPortalUrl?: string;
   shareUrl: string;
@@ -35,7 +34,6 @@ const PRESETS: { value: string; label: string; days: number | null }[] = [
 export function LookupResultView({
   result,
   rank,
-  histogram,
   cityShortName,
   cityPortalUrl,
   shareUrl,
@@ -44,6 +42,26 @@ export function LookupResultView({
   state,
   tweetText,
 }: LookupResultViewProps) {
+  // Lazily fetched on first filter open. Cached by the browser for an hour
+  // (and at the edge for a day) so subsequent opens are instant.
+  const [histogram, setHistogram] = useState<Record<string, number> | null>(null);
+  const [histogramLoading, setHistogramLoading] = useState(false);
+
+  async function ensureHistogram() {
+    if (histogram || histogramLoading) return;
+    setHistogramLoading(true);
+    try {
+      const res = await fetch("/api/rank-histogram");
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, number>;
+        setHistogram(data);
+      }
+    } catch {
+      // silent — rank recompute will show "estimate unavailable" if needed
+    } finally {
+      setHistogramLoading(false);
+    }
+  }
   const [preset, setPreset] = useState<string>("all");
   const [customSince, setCustomSince] = useState<string>("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -262,7 +280,11 @@ export function LookupResultView({
           <h2 className="font-serif text-2xl font-black tracking-tight">violations</h2>
           <button
             type="button"
-            onClick={() => setFilterOpen((o) => !o)}
+            onClick={() => {
+              setFilterOpen((o) => !o);
+              // kick off histogram fetch the moment the filter is engaged
+              ensureHistogram();
+            }}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition",
               filtered.isFiltered

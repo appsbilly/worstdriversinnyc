@@ -66,7 +66,6 @@ export default async function LookupPage({ params }: PageProps) {
 
   let result: PlateLookupResult | null = null;
   let rank: RankInfo | null = null;
-  let histogram: Record<string, number> | null = null;
   let err: string | null = null;
 
   try {
@@ -74,9 +73,8 @@ export default async function LookupPage({ params }: PageProps) {
     if (city.getRank) {
       rank = await city.getRank(result.totalViolations, result.totalFinesIssued);
     }
-    if (city.getRankHistogram) {
-      histogram = await city.getRankHistogram();
-    }
+    // The rank histogram is lazily fetched client-side when the filter opens.
+    // Saves ~50KB of JSON per page load for everyone who doesn't filter.
   } catch (e) {
     if (e instanceof CityNotYetSupportedError) {
       return <ComingSoonState city={city} />;
@@ -130,7 +128,6 @@ export default async function LookupPage({ params }: PageProps) {
         <LookupResultView
           result={result}
           rank={rank}
-          histogram={histogram}
           cityShortName={cityShort}
           cityPortalUrl={result.cityPortalUrl}
           shareUrl={shareUrl}
