@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/utils";
@@ -66,6 +66,11 @@ export const metadata: Metadata = {
     ],
     apple: "/icon.svg",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f0c0a",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
