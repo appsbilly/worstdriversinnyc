@@ -9,6 +9,20 @@ interface ResultCardProps {
   cityShortName: string;
 }
 
+/**
+ * Convert a rank/total into a "top X%" label with adaptive precision so very
+ * bad drivers don't show as "top 0%" and merely-bad drivers don't show as
+ * "top 0.001%". The lower the percentile, the worse the driver.
+ */
+function formatPercentile(rank: number, total: number): string {
+  const pct = (rank / total) * 100;
+  if (pct < 0.01) return "top 0.01%";
+  if (pct < 0.1) return `top ${(Math.ceil(pct * 100) / 100).toFixed(2)}%`;
+  if (pct < 1) return `top ${(Math.ceil(pct * 10) / 10).toFixed(1)}%`;
+  if (pct < 10) return `top ${Math.ceil(pct)}%`;
+  return `top ${Math.ceil(pct)}%`;
+}
+
 export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
   const hasRank = rank && rank.total > 0 && result.totalViolations > 0;
   const clean = result.totalViolations === 0;
@@ -24,6 +38,11 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
     : tier === "warn" ? "text-accent"
     : tier === "ok" ? "text-ok"
     : "text-foreground";
+  const pillCls =
+    tier === "danger" ? "border-danger/40 bg-danger/10 text-danger"
+    : tier === "warn" ? "border-accent/40 bg-accent/10 text-accent"
+    : tier === "ok" ? "border-ok/40 bg-ok/10 text-ok"
+    : "border-border bg-muted text-muted-foreground";
 
   return (
     <section className="rounded-2xl border border-border bg-muted/40 p-5 md:p-10 text-center">
@@ -76,7 +95,17 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
             <p className="mt-2 font-serif italic text-xl tracking-tight sm:text-2xl md:text-4xl">
               worst driver in {cityShortName}.
             </p>
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="mt-4 flex justify-center">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] font-bold md:text-[11px]",
+                  pillCls,
+                )}
+              >
+                {formatPercentile(rank.rank, rank.total)} of worst drivers
+              </span>
+            </div>
+            <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
               of {formatNumber(rank.total)} ranked
             </p>
           </>
