@@ -1,5 +1,5 @@
 import { PlateLookupResult, RankInfo } from "@/lib/cities/types";
-import { formatCurrency, formatDate, formatNumber, ordinalRank } from "@/lib/format";
+import { formatCurrency, formatNumber, ordinalRank } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PlateReveal } from "./PlateReveal";
 
@@ -50,19 +50,6 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
       <div className="flex justify-center">
         <PlateReveal plate={result.plate} state={result.state} />
       </div>
-
-      {/* date range as small eyebrow */}
-      {result.firstViolationDate ? (
-        <p className="mt-4 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-          <span className="opacity-60">on file</span>{" "}
-          <span className="text-foreground tracking-normal normal-case">
-            {formatDate(result.firstViolationDate)}
-            {result.lastViolationDate && result.lastViolationDate !== result.firstViolationDate
-              ? ` – ${formatDate(result.lastViolationDate)}`
-              : ""}
-          </span>
-        </p>
-      ) : null}
 
       {/* hero: the rank statement */}
       <div className="mt-8 md:mt-10">
