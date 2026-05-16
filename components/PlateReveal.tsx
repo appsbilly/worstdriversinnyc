@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { PlateFrame } from "./PlateFrame";
 import { anonymizePlate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -15,15 +16,17 @@ export function PlateReveal({ plate, state, className }: PlateRevealProps) {
   const [hidden, setHidden] = useState(false);
   const displayPlate = hidden ? anonymizePlate(plate) : plate;
   return (
-    <div className={cn("inline-flex flex-col items-center gap-2", className)}>
+    <div className={cn("relative inline-flex", className)}>
       <PlateFrame plate={displayPlate} state={state} />
       <button
         type="button"
         onClick={() => setHidden((h) => !h)}
+        aria-label={hidden ? "show plate" : "hide plate"}
+        title={hidden ? "show plate" : "hide plate"}
         data-capture-skip
-        className="inline-flex h-9 items-center px-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+        className="absolute -top-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground hover:border-foreground/40"
       >
-        {hidden ? "show plate" : "hide plate"}
+        {hidden ? <EyeOff size={14} strokeWidth={2} /> : <Eye size={14} strokeWidth={2} />}
       </button>
     </div>
   );
