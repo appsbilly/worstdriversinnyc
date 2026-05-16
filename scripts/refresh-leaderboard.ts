@@ -401,6 +401,11 @@ async function main() {
     if (pageIndex % FLUSH_EVERY_PAGES === 0) {
       const flushStart = Date.now();
       await writeWindows(redis, aggs, ranges, state, totalRows, TTL, /* isFinal */ false);
+      // Persist cursor + plate state to disk every flush so a cancelled run
+      // (GH Actions cap, OOM, etc.) doesn't lose hours of bootstrap progress.
+      // The actions/cache/save step at job-end picks up whatever is on disk.
+      if (highestIdSeen) state.lastProcessedId = highestIdSeen;
+      saveState(state);
       console.log(`  ↳ flushed leaderboards to redis (${Date.now() - flushStart}ms)`);
     }
   }

@@ -45,6 +45,9 @@ jobs:
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           NYC_OPEN_DATA_APP_TOKEN: ${{ secrets.NYC_OPEN_DATA_APP_TOKEN }}
           ROWS_TARGET: ${{ github.event.inputs.rows_target || '80000000' }}
+          # Bootstrap holds ~6M plate entries plus windowed aggregators in memory.
+          # Default Node heap (~1.7GB) is not enough — runners have 7GB.
+          NODE_OPTIONS: "--max-old-space-size=6144"
         run: npm run refresh-leaderboard
 
       # Always save the updated state, even if a downstream step failed —
