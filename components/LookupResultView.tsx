@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PlateLookupResult, RankInfo, Violation } from "@/lib/cities/types";
 import { ResultCard } from "./ResultCard";
 import { ViolationTable } from "./ViolationTable";
@@ -45,6 +45,39 @@ export function LookupResultView({
 }: LookupResultViewProps) {
   const [preset, setPreset] = useState<string>("all");
   const [customSince, setCustomSince] = useState<string>("");
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  /**
+   * Capture the result card as a PNG and trigger a download.
+   * Uses html-to-image which is lazy-loaded only on first click.
+   */
+  async function saveAsImage() {
+    if (!cardRef.current || saveState === "saving") return;
+    setSaveState("saving");
+    try {
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(cardRef.current, {
+        backgroundColor: "#0e0a07", // matches dark mode bg
+        pixelRatio: 2,
+        cacheBust: true,
+        filter: (node) => {
+          // skip controls that aren't part of the visual design
+          return !(node instanceof HTMLElement && node.hasAttribute("data-capture-skip"));
+        },
+      });
+      const link = document.createElement("a");
+      link.download = `worstdriversinnyc-${plate}.png`;
+      link.href = dataUrl;
+      link.click();
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1500);
+    } catch (err) {
+      console.error("save card failed:", err);
+      setSaveState("error");
+      setTimeout(() => setSaveState("idle"), 1500);
+    }
+  }
 
   const filtered = useMemo(() => {
     const isAllTime = preset === "all" && !customSince;
@@ -160,20 +193,35 @@ export function LookupResultView({
         ) : null}
       </div>
 
-      <ResultCard
-        result={filtered.result}
-        rank={filtered.rank}
-        cityShortName={cityShortName}
-      />
+      <div ref={cardRef}>
+        <ResultCard
+          result={filtered.result}
+          rank={filtered.rank}
+          cityShortName={cityShortName}
+        />
+      </div>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <ShareButton
-          copyUrl={shareUrl}
-          tweetSiteUrl={tweetSiteUrl}
-          plate={plate}
-          state={state}
-          tweetText={tweetText}
-        />
+        <div className="flex flex-wrap gap-2">
+          <ShareButton
+            copyUrl={shareUrl}
+            tweetSiteUrl={tweetSiteUrl}
+            plate={plate}
+            state={state}
+            tweetText={tweetText}
+          />
+          <button
+            type="button"
+            onClick={saveAsImage}
+            disabled={saveState === "saving"}
+            className="inline-flex h-10 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
+          >
+            {saveState === "saving" ? "saving…" :
+             saveState === "saved" ? "saved!" :
+             saveState === "error" ? "try again" :
+             "save image"}
+          </button>
+        </div>
         {cityPortalUrl ? (
           <a
             href={cityPortalUrl}

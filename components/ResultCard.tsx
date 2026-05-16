@@ -153,6 +153,12 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
           </p>
         </div>
       ) : null}
+
+      {/* brand footer — visible in screenshots & exported images so shares are self-attributed */}
+      <div className="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+        <span className="inline-block h-2.5 w-2.5 bg-accent" aria-hidden />
+        worstdriversinnyc.com
+      </div>
     </section>
   );
 }
