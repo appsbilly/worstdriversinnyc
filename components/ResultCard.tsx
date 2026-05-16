@@ -52,7 +52,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
       </div>
 
       {/* hero: the rank statement */}
-      <div className="mt-8 md:mt-10">
+      <div className="mt-6 md:mt-8">
         {clean ? (
           <>
             <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -82,7 +82,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
             <p className="mt-2 font-serif italic text-xl tracking-tight sm:text-2xl md:text-4xl">
               worst driver in {cityShortName}.
             </p>
-            <div className="mt-4 flex justify-center">
+            <div className="mt-3 flex justify-center">
               <span
                 className={cn(
                   "inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] font-bold md:text-[11px]",
@@ -92,7 +92,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
                 {formatPercentile(rank.rank, rank.total)} of worst drivers
               </span>
             </div>
-            <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
               of {formatNumber(rank.total)} ranked
             </p>
           </>
@@ -118,7 +118,7 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
       </div>
 
       {/* stats grid */}
-      <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-6 text-left md:mt-10 md:grid-cols-5 md:pt-8">
+      <div className="mt-6 grid grid-cols-3 gap-4 border-t border-border pt-5 md:mt-8 md:grid-cols-5 md:pt-6">
         <Stat label="violations" value={formatNumber(result.totalViolations)} />
         <Stat label="paid" value={formatNumber(result.totalPaid)} />
         <Stat label="unpaid" value={formatNumber(result.totalUnpaid)} accent={result.totalUnpaid > 0 ? "danger" : undefined} />
@@ -131,18 +131,18 @@ export function ResultCard({ result, rank, cityShortName }: ResultCardProps) {
 
       {/* outstanding (only when relevant) */}
       {result.totalFinesOutstanding > 0 ? (
-        <div className="mt-4 rounded-md border border-danger/30 bg-danger/5 px-4 py-4 text-center">
+        <div className="mt-4 rounded-md border border-danger/30 bg-danger/5 px-4 py-3 text-center">
           <p className="text-[11px] uppercase tracking-[0.22em] text-danger/80">
             still owes the city
           </p>
-          <p className="mt-1 font-display text-4xl font-black text-danger tabular leading-none md:text-5xl">
+          <p className="mt-1 font-display text-3xl font-black text-danger tabular leading-none md:text-4xl">
             {formatCurrency(result.totalFinesOutstanding)}
           </p>
         </div>
       ) : null}
 
       {/* brand footer — visible in screenshots & exported images so shares are self-attributed */}
-      <div className="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+      <div className="mt-5 flex items-center justify-center gap-2 border-t border-border pt-3 text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
         <span className="inline-block h-2.5 w-2.5 bg-accent" aria-hidden />
         worstdriversinnyc.com
       </div>
@@ -162,11 +162,11 @@ function Stat({
   const accentCls =
     accent === "danger" ? "text-danger" : accent === "ok" ? "text-ok" : "text-foreground";
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col items-center text-center">
       <span className="text-[10px] uppercase tracking-widest text-muted-foreground md:text-xs">
         {label}
       </span>
-      <span className={cn("font-serif text-2xl font-bold tracking-tight md:text-4xl tabular", accentCls)}>
+      <span className={cn("mt-1 font-serif text-2xl font-bold tracking-tight md:text-4xl tabular", accentCls)}>
         {value}
       </span>
     </div>
