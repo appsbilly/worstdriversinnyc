@@ -49,33 +49,58 @@ export function LookupResultView({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   /**
-   * Capture the result card as a PNG and trigger a download.
-   * Uses html-to-image which is lazy-loaded only on first click.
+   * Capture the result card as a PNG and copy it to the clipboard so the user
+   * can paste directly into a tweet, message, etc. Falls back to a download if
+   * the browser doesn't support image-blob clipboard writes (older Safari, etc).
+   *
+   * On Safari we wrap the blob in a Promise<Blob> directly so the user-gesture
+   * context isn't lost across the async boundary.
    */
-  async function saveAsImage() {
+  async function copyAsImage() {
     if (!cardRef.current || saveState === "saving") return;
     setSaveState("saving");
     try {
-      const { toPng } = await import("html-to-image");
-      const dataUrl = await toPng(cardRef.current, {
-        backgroundColor: "#0e0a07", // matches dark mode bg
+      const { toBlob } = await import("html-to-image");
+      const captureOptions = {
+        backgroundColor: "#0e0a07",
         pixelRatio: 2,
         cacheBust: true,
-        filter: (node) => {
-          // skip controls that aren't part of the visual design
-          return !(node instanceof HTMLElement && node.hasAttribute("data-capture-skip"));
-        },
-      });
-      const link = document.createElement("a");
-      link.download = `worstdriversinnyc-${plate}.png`;
-      link.href = dataUrl;
-      link.click();
+        filter: (node: HTMLElement) =>
+          !(node instanceof HTMLElement && node.hasAttribute("data-capture-skip")),
+      };
+
+      const supportsImageClipboard =
+        typeof navigator !== "undefined" &&
+        !!navigator.clipboard &&
+        typeof ClipboardItem !== "undefined";
+
+      if (supportsImageClipboard) {
+        // Pass a blob promise to ClipboardItem so Safari keeps the gesture context.
+        const blobPromise = toBlob(cardRef.current, captureOptions).then((b) => {
+          if (!b) throw new Error("blob conversion failed");
+          return b;
+        });
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blobPromise }),
+        ]);
+      } else {
+        // Fallback: download the PNG.
+        const blob = await toBlob(cardRef.current, captureOptions);
+        if (!blob) throw new Error("blob conversion failed");
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `worstdriversinnyc-${plate}.png`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
       setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1500);
+      setTimeout(() => setSaveState("idle"), 1800);
     } catch (err) {
-      console.error("save card failed:", err);
+      console.error("copy card failed:", err);
       setSaveState("error");
-      setTimeout(() => setSaveState("idle"), 1500);
+      setTimeout(() => setSaveState("idle"), 1800);
     }
   }
 
@@ -212,14 +237,14 @@ export function LookupResultView({
           />
           <button
             type="button"
-            onClick={saveAsImage}
+            onClick={copyAsImage}
             disabled={saveState === "saving"}
             className="inline-flex h-10 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
           >
-            {saveState === "saving" ? "saving…" :
-             saveState === "saved" ? "saved!" :
+            {saveState === "saving" ? "copying…" :
+             saveState === "saved" ? "copied!" :
              saveState === "error" ? "try again" :
-             "save image"}
+             "copy image"}
           </button>
         </div>
         {cityPortalUrl ? (
