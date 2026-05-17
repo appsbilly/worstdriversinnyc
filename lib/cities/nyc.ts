@@ -341,49 +341,6 @@ async function lookup(plate: string, state: string): Promise<PlateLookupResult> 
   return fresh;
 }
 
-type RecentRow = { plate?: string; state?: string; fine_amount?: string };
-
-async function fetchLeaderboardFresh(limit: number): Promise<LeaderboardEntry[]> {
-  // SODA can't GROUP BY across the whole table within a 60s function budget,
-  // and $order=issue_date with $offset pagination forces a full sort that's
-  // also too slow. Instead we pull a single large slice using SODA's always-
-  // indexed system row id (`:id DESC`) — that gives us the most-recently-
-  // inserted rows essentially for free, no sort required.
-  type Bucket = { plate: string; state: string; count: number; fines: number };
-  const buckets = new Map<string, Bucket>();
-
-  const rows = await sodaFetch<RecentRow[]>({
-    searchParams: {
-      $select: "plate,state,fine_amount",
-      $limit: "50000",
-      $order: ":id DESC",
-    },
-    timeoutMs: 45_000,
-  });
-
-  for (const r of rows) {
-    if (!r.plate || !r.state) continue;
-    const key = `${r.state}|${r.plate}`;
-    const fine = Number(r.fine_amount) || 0;
-    const existing = buckets.get(key);
-    if (existing) {
-      existing.count += 1;
-      existing.fines += fine;
-    } else {
-      buckets.set(key, { plate: r.plate, state: r.state, count: 1, fines: fine });
-    }
-  }
-
-  const sorted = [...buckets.values()].sort((a, b) => b.count - a.count);
-  return sorted.slice(0, Math.max(1, Math.min(limit, 500))).map((e, i) => ({
-    rank: i + 1,
-    plate: e.plate,
-    state: e.state,
-    violationCount: e.count,
-    totalFines: Math.round(e.fines * 100) / 100,
-  }));
-}
-
 async function getLeaderboard(
   limit: number,
   window: LeaderboardWindow = "1m",
@@ -470,43 +427,6 @@ async function getPercentile(violationCount: number): Promise<number> {
   if (violationCount >= p75) return 25;
   if (violationCount >= p50) return 50;
   return 75;
-}
-
-export async function computeAndCachePercentiles(
-  leaderboard: LeaderboardEntry[],
-): Promise<PercentileBuckets> {
-  // Use leaderboard distribution as proxy. For a robust implementation we'd
-  // sample additional plates, but the top-500 distribution gives reasonable cutpoints.
-  const counts = leaderboard.map((e) => e.violationCount).sort((a, b) => a - b);
-  function pct(p: number): number {
-    if (!counts.length) return 0;
-    const idx = Math.min(counts.length - 1, Math.floor((p / 100) * counts.length));
-    return counts[idx]!;
-  }
-  const buckets: PercentileBuckets = {
-    city: "nyc",
-    computedAt: new Date().toISOString(),
-    totalPlatesObserved: counts.length,
-    buckets: {
-      p50: Math.max(2, pct(50)),
-      p75: Math.max(3, pct(75)),
-      p90: Math.max(5, pct(90)),
-      p95: Math.max(10, pct(95)),
-      p99: Math.max(25, pct(99)),
-    },
-  };
-  await cacheSet(`percentiles:nyc`, buckets, TTL.PERCENTILES);
-  return buckets;
-}
-
-export async function refreshNycLeaderboard(): Promise<{
-  leaderboardCount: number;
-  buckets: PercentileBuckets;
-}> {
-  const fresh = await fetchLeaderboardFresh(500);
-  await cacheSet(`leaderboard:nyc`, fresh, TTL.LEADERBOARD);
-  const buckets = await computeAndCachePercentiles(fresh);
-  return { leaderboardCount: fresh.length, buckets };
 }
 
 export const nycAdapter: CityAdapter = {
