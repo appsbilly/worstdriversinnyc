@@ -55,8 +55,14 @@ export interface LeaderboardMeta {
   computedAt: string;
   oldestIssueDate: string;
   newestIssueDate: string;
+  /** Rows scanned in THIS run only (not cumulative across runs). */
   rowsScanned: number;
+  /** Unique plates in this specific window's aggregate (not cumulative). */
   uniquePlates: number;
+  /** Cumulative across all runs — plates indexed in the persistent state. */
+  totalPlatesIndexed?: number;
+  /** Cumulative across all runs — total tickets in the persistent state. */
+  totalTicketsIndexed?: number;
 }
 
 export interface PercentileBuckets {

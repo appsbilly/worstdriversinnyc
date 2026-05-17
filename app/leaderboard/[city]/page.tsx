@@ -106,10 +106,21 @@ export default async function LeaderboardPage({ params, searchParams }: PageProp
           active={window}
         />
       </div>
-      {range ? (
+      {range || meta?.totalPlatesIndexed ? (
         <p className="mt-3 text-xs text-muted-foreground">
-          data window: <span className="text-foreground">{range}</span>
-          {meta?.rowsScanned ? ` · ${formatNumber(meta.rowsScanned)} tickets scanned` : null}
+          {range ? <>data window: <span className="text-foreground">{range}</span></> : null}
+          {meta?.totalPlatesIndexed ? (
+            <>
+              {range ? " · " : ""}
+              <span className="text-foreground">{formatNumber(meta.totalPlatesIndexed)}</span> plates indexed
+            </>
+          ) : null}
+          {meta?.totalTicketsIndexed ? (
+            <>
+              {" · "}
+              <span className="text-foreground">{formatNumber(meta.totalTicketsIndexed)}</span> tickets
+            </>
+          ) : null}
         </p>
       ) : null}
       <div className="mt-6">

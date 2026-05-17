@@ -165,6 +165,8 @@ interface Meta {
   newestIssueDate: string;
   rowsScanned: number;
   uniquePlates: number;
+  totalPlatesIndexed: number;
+  totalTicketsIndexed: number;
 }
 
 async function writeWindows(
@@ -176,6 +178,14 @@ async function writeWindows(
   ttlSeconds: number,
   isFinal: boolean,
 ) {
+  // Cumulative metrics from the persisted state (not this-run-only).
+  // These are denormalized onto every window's meta so the UI can show
+  // "N plates indexed · M tickets" regardless of which window is selected.
+  const plateEntries = Object.values(state.plates);
+  const totalPlatesIndexed = plateEntries.length;
+  let totalTicketsIndexed = 0;
+  for (const [count] of plateEntries) totalTicketsIndexed += count;
+
   // Always flush windowed leaderboards so the page has fresh recent data
   // during a long-running refresh.
   for (const w of WINDOWS) {
@@ -198,6 +208,8 @@ async function writeWindows(
       newestIssueDate: toIsoDay(ranges[w].max),
       rowsScanned: totalRows,
       uniquePlates: aggs[w].size,
+      totalPlatesIndexed,
+      totalTicketsIndexed,
     };
     await redis.set(`leaderboard:nyc:${w}`, leaderboard, { ex: ttlSeconds });
     await redis.set(`leaderboard:nyc:${w}:meta`, meta, { ex: ttlSeconds });
@@ -210,9 +222,7 @@ async function writeWindows(
   // states leaking out mid-refresh.
   if (!isFinal) return;
 
-  const plateEntries = Object.values(state.plates);
-
-  // Histogram of plate-count -> # plates at that count
+  // Histogram of plate-count -> # plates at that count (reuses plateEntries from above)
   const histogram: Record<string, number> = {};
   for (const [count] of plateEntries) {
     const k = String(count);
