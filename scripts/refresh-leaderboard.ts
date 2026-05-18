@@ -34,7 +34,14 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const SODA_BASE = "https://data.cityofnewyork.us/resource/nc67-uf89.json";
 const PAGE_SIZE = 50_000;
-const ROWS_TARGET = Number(process.env.ROWS_TARGET || 80_000_000);
+// Two targets: bootstrap goes deep (build the full denominator + state),
+// incremental still needs to scan back ~1 year so the windowed (1w/1m/1y)
+// leaderboards have complete data — they're rebuilt fresh every run from
+// the scan, not from persistent state.
+const BOOTSTRAP_ROWS_TARGET = Number(process.env.ROWS_TARGET || 80_000_000);
+const INCREMENTAL_ROWS_TARGET = Number(
+  process.env.INCREMENTAL_ROWS_TARGET || 12_000_000,
+);
 const FLUSH_EVERY_PAGES = Number(process.env.FLUSH_EVERY_PAGES || 100);
 const APP_TOKEN = process.env.NYC_OPEN_DATA_APP_TOKEN;
 const PAGE_TIMEOUT_MS = 120_000;
@@ -310,7 +317,12 @@ async function main() {
   let newPlatesAdded = 0;
   let newTicketsApplied = 0;
 
-  console.log(`refresh-leaderboard: target=${ROWS_TARGET.toLocaleString()} rows, page=${PAGE_SIZE.toLocaleString()}, keyset pagination via :id`);
+  // Bootstrap (no state yet) scans deep; incremental runs scan back ~1 year
+  // so the windowed leaderboards have full coverage.
+  const ROWS_TARGET = previousCursor === null ? BOOTSTRAP_ROWS_TARGET : INCREMENTAL_ROWS_TARGET;
+  const runMode = previousCursor === null ? "bootstrap" : "incremental";
+
+  console.log(`refresh-leaderboard: mode=${runMode}, target=${ROWS_TARGET.toLocaleString()} rows, page=${PAGE_SIZE.toLocaleString()}, keyset pagination via :id`);
   if (APP_TOKEN) console.log("using NYC_OPEN_DATA_APP_TOKEN");
   console.log(`flush leaderboards every ${FLUSH_EVERY_PAGES} pages; rank artefacts on final flush only`);
 
@@ -400,13 +412,10 @@ async function main() {
       break;
     }
 
-    // Stop scanning once we've gone deeper than the previous cursor — we've
-    // caught up on all new tickets and don't need to re-scan older history.
-    // (Only applies after the first run when previousCursor is set.)
-    if (previousCursor !== null && cursor && cursor <= previousCursor && newTicketsApplied > 0) {
-      console.log(`caught up: cursor=${cursor} reached previousCursor=${previousCursor}. stopping incremental scan.`);
-      break;
-    }
+    // NOTE: we deliberately do NOT break when the cursor passes previousCursor.
+    // The windowed aggregators (1w/1m/1y) are rebuilt fresh every run from the
+    // scan data — so we need to scan back through enough history (~1 year for
+    // the 1y window). ROWS_TARGET is set lower on incremental runs to cap this.
 
     if (pageIndex % FLUSH_EVERY_PAGES === 0) {
       const flushStart = Date.now();
