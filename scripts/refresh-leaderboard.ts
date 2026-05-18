@@ -289,10 +289,17 @@ async function main() {
   const startedAt = Date.now();
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;
+  // Anchor for window cutoffs. Defaults to "now" but we re-anchor to the
+  // dataset's most recent issue_date after fetching the first page, because
+  // NYC's open data has a multi-day ingestion lag (latest tickets are usually
+  // 3-7 days behind real time). Without this, "1 week" can yield only 1-3 days
+  // of actual data when SODA hasn't published the very-recent stuff yet.
+  // We clamp to [now - 30 days, now + 1 day] to defend against typo dates.
+  let windowAnchor = now;
   const cutoffs: Record<Window, number> = {
-    "1w": now - 7 * DAY,
-    "1m": now - 30 * DAY,
-    "1y": now - 365 * DAY,
+    "1w": windowAnchor - 7 * DAY,
+    "1m": windowAnchor - 30 * DAY,
+    "1y": windowAnchor - 365 * DAY,
     "all": 0,
   };
 
@@ -342,6 +349,32 @@ async function main() {
     }
     let pageMinDate = Infinity;
     let pageMaxDate = 0;
+
+    // On the first page, re-anchor the window cutoffs to the dataset's most
+    // recent issue_date. This handles NYC's ingestion lag — if the dataset's
+    // freshest tickets are dated 5 days ago, "1 week" should mean "last 7 days
+    // of available data", not "[6 days of lag] + [1 day of overlap]".
+    if (pageIndex === 0) {
+      let datasetMaxMs = 0;
+      const tomorrow = now + DAY;
+      for (const r of rows) {
+        const d = parseSodaDate(r.issue_date);
+        if (d > 0 && d <= tomorrow && d > datasetMaxMs) datasetMaxMs = d;
+      }
+      // Clamp: don't anchor more than 30 days back (in case the dataset is
+      // bizarrely stale), and never anchor into the future.
+      if (datasetMaxMs > now - 30 * DAY && datasetMaxMs <= now) {
+        windowAnchor = datasetMaxMs;
+        cutoffs["1w"] = windowAnchor - 7 * DAY;
+        cutoffs["1m"] = windowAnchor - 30 * DAY;
+        cutoffs["1y"] = windowAnchor - 365 * DAY;
+        console.log(
+          `window anchor: ${toIsoDay(windowAnchor)} (dataset lag ${Math.round(
+            (now - windowAnchor) / DAY,
+          )} days)`,
+        );
+      }
+    }
 
     // Track highest :id from very first page (since order is DESC).
     if (highestIdSeen === null && rows.length > 0) {
