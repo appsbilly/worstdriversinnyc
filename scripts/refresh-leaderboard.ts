@@ -195,8 +195,30 @@ async function writeWindows(
 
   // Always flush windowed leaderboards so the page has fresh recent data
   // during a long-running refresh.
+  //
+  // IMPORTANT: the "all" window sources from cumulative `state.plates`, not
+  // this run's transient aggregator. Otherwise the all-time leaderboard goes
+  // stale — incremental runs only scan ~1 year of data, so aggs.all would
+  // reflect "most ticketed in the last year" while the rank histogram (also
+  // built from state) thinks they're #N out of millions. This caused #1 on
+  // the leaderboard to render as "47th worst driver" on the lookup page.
   for (const w of WINDOWS) {
-    const sorted = [...aggs[w].values()].sort((a, b) => {
+    type Bucket = { plate: string; state: string; count: number; fines: number };
+    let pool: Bucket[];
+    if (w === "all") {
+      pool = [];
+      for (const key in state.plates) {
+        const sep = key.indexOf("|");
+        if (sep <= 0) continue;
+        const stateCode = key.slice(0, sep);
+        const plateCode = key.slice(sep + 1);
+        const [count, fines] = state.plates[key]!;
+        pool.push({ plate: plateCode, state: stateCode, count, fines });
+      }
+    } else {
+      pool = [...aggs[w].values()];
+    }
+    const sorted = pool.sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
       if (b.fines !== a.fines) return b.fines - a.fines;
       return a.plate.localeCompare(b.plate);
@@ -214,7 +236,7 @@ async function writeWindows(
       oldestIssueDate: toIsoDay(ranges[w].min),
       newestIssueDate: toIsoDay(ranges[w].max),
       rowsScanned: totalRows,
-      uniquePlates: aggs[w].size,
+      uniquePlates: w === "all" ? totalPlatesIndexed : aggs[w].size,
       totalPlatesIndexed,
       totalTicketsIndexed,
     };
