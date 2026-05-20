@@ -246,10 +246,14 @@ async function writeWindows(
   const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
   if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: ttlSeconds });
 
-  // Rank-related artefacts derive from the FULL accumulated state, so they're
-  // stable across runs. Only write them on the final flush to avoid partial
-  // states leaking out mid-refresh.
-  if (!isFinal) return;
+  // Rank-related artefacts derive from `state.plates` — the persisted
+  // cumulative state — so they're consistent with the leaderboards above
+  // (which also source the "all" window from state). state.plates only ever
+  // grows during a run (we add new plates, never remove), so writing the
+  // histogram on every flush is safe and keeps the rank badge aligned with
+  // the leaderboard throughout a refresh. (Previously we only wrote on the
+  // final flush to avoid mid-run fluctuation, but that's no longer needed.)
+  void isFinal; // kept in the signature for future flush-only artefacts
 
   // Histogram of plate-count -> # plates at that count (reuses plateEntries from above)
   const histogram: Record<string, number> = {};
