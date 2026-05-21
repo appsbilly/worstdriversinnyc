@@ -196,28 +196,17 @@ async function writeWindows(
   // Always flush windowed leaderboards so the page has fresh recent data
   // during a long-running refresh.
   //
-  // IMPORTANT: the "all" window sources from cumulative `state.plates`, not
-  // this run's transient aggregator. Otherwise the all-time leaderboard goes
-  // stale — incremental runs only scan ~1 year of data, so aggs.all would
-  // reflect "most ticketed in the last year" while the rank histogram (also
-  // built from state) thinks they're #N out of millions. This caused #1 on
-  // the leaderboard to render as "47th worst driver" on the lookup page.
+  // All windows now source from THIS RUN's aggs (not state.plates). We were
+  // previously sourcing the "all" window from cumulative state, but NYC
+  // re-indexes the SODA dataset periodically (reassigning :id values to old
+  // tickets). Our incremental dedup keyed on `:id > previousCursor` was
+  // treating those re-indexed old tickets as fresh and counting them again,
+  // inflating state.plates by ~80% over many refreshes. So state.plates is
+  // an unreliable source for counts. Aggs reflects what was actually scanned
+  // and matches what an individual SODA query for a plate returns.
   for (const w of WINDOWS) {
     type Bucket = { plate: string; state: string; count: number; fines: number };
-    let pool: Bucket[];
-    if (w === "all") {
-      pool = [];
-      for (const key in state.plates) {
-        const sep = key.indexOf("|");
-        if (sep <= 0) continue;
-        const stateCode = key.slice(0, sep);
-        const plateCode = key.slice(sep + 1);
-        const [count, fines] = state.plates[key]!;
-        pool.push({ plate: plateCode, state: stateCode, count, fines });
-      }
-    } else {
-      pool = [...aggs[w].values()];
-    }
+    const pool: Bucket[] = [...aggs[w].values()];
     const sorted = pool.sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
       if (b.fines !== a.fines) return b.fines - a.fines;
@@ -236,7 +225,7 @@ async function writeWindows(
       oldestIssueDate: toIsoDay(ranges[w].min),
       newestIssueDate: toIsoDay(ranges[w].max),
       rowsScanned: totalRows,
-      uniquePlates: w === "all" ? totalPlatesIndexed : aggs[w].size,
+      uniquePlates: aggs[w].size,
       totalPlatesIndexed,
       totalTicketsIndexed,
     };
@@ -246,32 +235,32 @@ async function writeWindows(
   const monthly = (await redis.get<unknown>("leaderboard:nyc:1m")) as unknown;
   if (monthly) await redis.set("leaderboard:nyc", monthly, { ex: ttlSeconds });
 
-  // Rank-related artefacts derive from `state.plates` — the persisted
-  // cumulative state — so they're consistent with the leaderboards above
-  // (which also source the "all" window from state). state.plates only ever
-  // grows during a run (we add new plates, never remove), so writing the
-  // histogram on every flush is safe and keeps the rank badge aligned with
-  // the leaderboard throughout a refresh. (Previously we only wrote on the
-  // final flush to avoid mid-run fluctuation, but that's no longer needed.)
+  // Rank artefacts also source from this run's aggs.all (matching the
+  // leaderboards above), NOT cumulative state.plates. Same reason: state
+  // double-counts re-indexed tickets, so its counts diverge from what SODA
+  // returns for an individual plate lookup. Aggs.all is the same data SODA
+  // would return.
   void isFinal; // kept in the signature for future flush-only artefacts
 
-  // Histogram of plate-count -> # plates at that count (reuses plateEntries from above)
+  const aggAllEntries = [...aggs.all.values()];
+
+  // Histogram of plate-count -> # plates at that count
   const histogram: Record<string, number> = {};
-  for (const [count] of plateEntries) {
-    const k = String(count);
+  for (const b of aggAllEntries) {
+    const k = String(b.count);
     histogram[k] = (histogram[k] || 0) + 1;
   }
   await redis.set("rank_histogram:nyc", histogram, { ex: ttlSeconds });
 
   // Per-count fine quantiles for tie-breaking by total fines
   const finesByCount = new Map<number, number[]>();
-  for (const [count, fines] of plateEntries) {
-    let arr = finesByCount.get(count);
+  for (const b of aggAllEntries) {
+    let arr = finesByCount.get(b.count);
     if (!arr) {
       arr = [];
-      finesByCount.set(count, arr);
+      finesByCount.set(b.count, arr);
     }
-    arr.push(fines);
+    arr.push(b.fines);
   }
   const fineQuantiles: Record<string, number[]> = {};
   for (const [count, arr] of finesByCount) {
@@ -286,8 +275,8 @@ async function writeWindows(
   }
   await redis.set("rank_fine_quantiles:nyc", fineQuantiles, { ex: ttlSeconds });
 
-  // Percentile buckets across the full population
-  const allCounts = plateEntries.map(([c]) => c).sort((a, b) => a - b);
+  // Percentile buckets across the full population (this run's aggs)
+  const allCounts = aggAllEntries.map((b) => b.count).sort((a, b) => a - b);
   const percentiles = {
     city: "nyc",
     computedAt: new Date().toISOString(),
